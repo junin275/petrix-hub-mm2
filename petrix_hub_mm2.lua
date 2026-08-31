@@ -8,7 +8,7 @@
 --   ╚═╝  ╚═╝╚═╝   ╚═╝      ╚═╝      ╚═╝       ╚═╝  ╚═╝ ╚═════╝ ╚═════╝
 --
 --   Murder Mystery 2  ·  native Roblox UI, no Drawing API
---   build 3.0.0+8367b263  ·  2026-08-31 21:54 UTC
+--   build 3.0.0+ab4d688b  ·  2026-08-31 21:58 UTC
 --
 --   GENERATED FILE — do not edit directly.
 --   Sources live in src/mm2/ ; rebuild with `python build.py`.
@@ -1294,8 +1294,8 @@ do
     end
 
     -- ============================================================== WINDOW
-    local WIN_W, WIN_H = 660, 452
-    local SIDEBAR_W, TOPBAR_H = 152, 46
+    local WIN_W, WIN_H = 540, 380
+    local SIDEBAR_W, TOPBAR_H = 128, 40
 
     local Root = make("Frame", {
         Name = "Root",
@@ -1324,7 +1324,7 @@ do
     -- A soft accent wash across the top edge, so the window reads as themed
     -- rather than as a flat grey box.
     local wash = make("Frame", {
-        Size = UDim2.new(1, 0, 0, 150),
+        Size = UDim2.new(1, 0, 0, 115),
         BackgroundColor3 = C.Accent,
         BackgroundTransparency = 0.93,
         BorderSizePixel = 0,
