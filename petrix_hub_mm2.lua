@@ -8,7 +8,7 @@
 --   ╚═╝  ╚═╝╚═╝   ╚═╝      ╚═╝      ╚═╝       ╚═╝  ╚═╝ ╚═════╝ ╚═════╝
 --
 --   Murder Mystery 2  ·  native Roblox UI, no Drawing API
---   build 3.0.0+aaa78383  ·  2026-08-31 22:33 UTC
+--   build 3.0.0+a6244436  ·  2026-08-31 22:35 UTC
 --
 --   GENERATED FILE — do not edit directly.
 --   Sources live in src/mm2/ ; rebuild with `python build.py`.
@@ -1337,13 +1337,13 @@ do
             Parent = Root,
         })
 
-        -- single clean "L" corner handle (2 bars, no duplicated outline)
+        -- single clean "L" corner handle on the bottom-RIGHT (matches hub corner)
         local strokeColor = C.TextFaint
-        local TH = 3
+        local TH = 4
         local cornerTop = make("Frame", {
             Size = UDim2.new(0, 30, 0, TH),
-            Position = UDim2.new(0, 0, 1, -TH),
-            AnchorPoint = Vector2.new(0, 1),
+            Position = UDim2.new(1, -32, 1, -TH),
+            AnchorPoint = Vector2.new(1, 1),
             BackgroundColor3 = strokeColor,
             BackgroundTransparency = 0,
             BorderSizePixel = 0,
@@ -1351,9 +1351,9 @@ do
             Parent = grip,
         })
         local cornerSide = make("Frame", {
-            Size = UDim2.new(0, TH, 0, 30),
-            Position = UDim2.new(0, 0, 1, 0),
-            AnchorPoint = Vector2.new(0, 1),
+            Size = UDim2.new(0, TH, 0, 32),
+            Position = UDim2.new(1, -TH, 1, -30),
+            AnchorPoint = Vector2.new(1, 1),
             BackgroundColor3 = strokeColor,
             BackgroundTransparency = 0,
             BorderSizePixel = 0,
