@@ -8,7 +8,7 @@
 --   ╚═╝  ╚═╝╚═╝   ╚═╝      ╚═╝      ╚═╝       ╚═╝  ╚═╝ ╚═════╝ ╚═════╝
 --
 --   Murder Mystery 2  ·  native Roblox UI, no Drawing API
---   build 3.0.0+c75f1f16  ·  2026-08-31 22:40 UTC
+--   build 3.0.0+c38f55a3  ·  2026-08-31 22:44 UTC
 --
 --   GENERATED FILE — do not edit directly.
 --   Sources live in src/mm2/ ; rebuild with `python build.py`.
@@ -1330,7 +1330,7 @@ do
         local grip = make("Frame", {
             Name = "ResizeGrip",
             Size = UDim2.fromOffset(GRIP, GRIP),
-            Position = UDim2.new(1, -6, 1, -6),
+            Position = UDim2.new(1, -2, 1, -2),
             AnchorPoint = Vector2.new(1, 1),
             BackgroundTransparency = 1,
             ZIndex = 60,
@@ -1410,7 +1410,7 @@ do
                 pulse = (pulse or 0) + (dt or 0.016) * 6
                 local s = 0.90 + 0.15 * (0.5 + 0.5 * math.sin(pulse))
                 grip.Size = UDim2.fromOffset(GRIP * s, GRIP * s)
-                grip.Position = UDim2.new(1, -6, 1, -6)
+                grip.Position = UDim2.new(1, -2, 1, -2)
             end
         end)
 
@@ -1709,13 +1709,22 @@ do
         Parent = Sidebar,
     })
 
-    local tabHolder = make("Frame", {
+    local tabHolder = make("ScrollingFrame", {
         Size = UDim2.new(1, 0, 1, -58),
         BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        Position = UDim2.fromOffset(0, 0),
+        ScrollBarThickness = 3,
+        ScrollBarImageColor3 = C.Accent,
+        ScrollBarImageTransparency = 0.5,
+        ScrollingDirection = Enum.ScrollingDirection.Y,
+        AutomaticCanvasSize = Enum.AutomaticSize.Y,
+        CanvasSize = UDim2.new(),
         Parent = Sidebar,
     })
+    UI.accented(tabHolder, "ScrollBarImageColor3")
     UI.list(tabHolder, 3)
-    UI.pad(tabHolder, 0, 12, 0, 10, 10)
+    UI.pad(tabHolder, 0, 12, 4, 10, 10)
 
     -- The indicator glides between tabs instead of hard-cutting.
     local indicator = make("Frame", {
