@@ -8,7 +8,7 @@
 --   ╚═╝  ╚═╝╚═╝   ╚═╝      ╚═╝      ╚═╝       ╚═╝  ╚═╝ ╚═════╝ ╚═════╝
 --
 --   Murder Mystery 2  ·  native Roblox UI, no Drawing API
---   build 3.0.0+a6244436  ·  2026-08-31 22:35 UTC
+--   build 3.0.0+c75f1f16  ·  2026-08-31 22:40 UTC
 --
 --   GENERATED FILE — do not edit directly.
 --   Sources live in src/mm2/ ; rebuild with `python build.py`.
@@ -1325,49 +1325,45 @@ do
     -- Hold the grip to resize the whole hub. While held it pulses.
     local function resizeGrip()
         local MIN_W, MIN_H, MAX_W, MAX_H = 420, 300, 1000, 700
-        local GRIP = 34
+        local GRIP = 40
 
         local grip = make("Frame", {
             Name = "ResizeGrip",
             Size = UDim2.fromOffset(GRIP, GRIP),
-            Position = UDim2.new(1, -8, 1, -8),
+            Position = UDim2.new(1, -6, 1, -6),
             AnchorPoint = Vector2.new(1, 1),
             BackgroundTransparency = 1,
-            ZIndex = 50,
-            Parent = Root,
+            ZIndex = 60,
+            Parent = Window,
         })
 
-        -- single clean "L" corner handle on the bottom-RIGHT (matches hub corner)
+        -- clean diagonal resize handle (3 slanted lines, classic grab look)
         local strokeColor = C.TextFaint
-        local TH = 4
-        local cornerTop = make("Frame", {
-            Size = UDim2.new(0, 30, 0, TH),
-            Position = UDim2.new(1, -32, 1, -TH),
-            AnchorPoint = Vector2.new(1, 1),
-            BackgroundColor3 = strokeColor,
-            BackgroundTransparency = 0,
-            BorderSizePixel = 0,
-            ZIndex = 51,
-            Parent = grip,
-        })
-        local cornerSide = make("Frame", {
-            Size = UDim2.new(0, TH, 0, 32),
-            Position = UDim2.new(1, -TH, 1, -30),
-            AnchorPoint = Vector2.new(1, 1),
-            BackgroundColor3 = strokeColor,
-            BackgroundTransparency = 0,
-            BorderSizePixel = 0,
-            ZIndex = 51,
-            Parent = grip,
-        })
+        local function slant(w, h, x, y)
+            return make("Frame", {
+                Size = UDim2.fromOffset(w, h),
+                Position = UDim2.fromOffset(x, y),
+                Rotation = 45,
+                AnchorPoint = Vector2.new(0, 0),
+                BackgroundColor3 = strokeColor,
+                BackgroundTransparency = 0,
+                BorderSizePixel = 0,
+                ZIndex = 61,
+                Parent = grip,
+            })
+        end
+        local lines = {
+            slant(24, 3, 6, 26),
+            slant(17, 3, 10, 18),
+            slant(10, 3, 14, 10),
+        }
 
         local pulse = 0
         local dragging = false
         local lastPos
 
         local function setStroke(col)
-            cornerTop.BackgroundColor3 = col
-            cornerSide.BackgroundColor3 = col
+            for _, l in ipairs(lines) do l.BackgroundColor3 = col end
         end
 
         grip.InputBegan:Connect(function(input)
@@ -1412,9 +1408,9 @@ do
         local heart = game:GetService("RunService").Heartbeat:Connect(function(dt)
             if dragging then
                 pulse = (pulse or 0) + (dt or 0.016) * 6
-                local s = 0.92 + 0.12 * (0.5 + 0.5 * math.sin(pulse))
+                local s = 0.90 + 0.15 * (0.5 + 0.5 * math.sin(pulse))
                 grip.Size = UDim2.fromOffset(GRIP * s, GRIP * s)
-                grip.Position = UDim2.new(1, -8, 1, -8)
+                grip.Position = UDim2.new(1, -6, 1, -6)
             end
         end)
 
