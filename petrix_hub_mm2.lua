@@ -8,7 +8,7 @@
 --   ╚═╝  ╚═╝╚═╝   ╚═╝      ╚═╝      ╚═╝       ╚═╝  ╚═╝ ╚═════╝ ╚═════╝
 --
 --   Murder Mystery 2  ·  native Roblox UI, no Drawing API
---   build 3.0.0+aab9c17e  ·  2026-08-31 22:27 UTC
+--   build 3.0.0+cca1c72c  ·  2026-08-31 22:31 UTC
 --
 --   GENERATED FILE — do not edit directly.
 --   Sources live in src/mm2/ ; rebuild with `python build.py`.
@@ -1463,13 +1463,13 @@ do
             ZIndex = 2,
             Parent = splash,
         })
-        UI.corner(card, 18)
+        UI.corner(card, 26)
         UI.stroke(card, C.Stroke, 1)
         UI.shadow(card, 30, 0.6)
 
-        -- accent top strip (child of card, z-above corner)
+        -- rounded accent top strip (card's ClipsDescendants rounds its corners)
         local strip = make("Frame", {
-            Size = UDim2.new(1, 0, 0, 5),
+            Size = UDim2.new(1, 0, 0, 8),
             Position = UDim2.fromOffset(0, 0),
             AnchorPoint = Vector2.new(0, 0),
             BackgroundColor3 = C.Accent,
