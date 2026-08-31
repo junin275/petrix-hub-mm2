@@ -8,7 +8,7 @@
 --   ╚═╝  ╚═╝╚═╝   ╚═╝      ╚═╝      ╚═╝       ╚═╝  ╚═╝ ╚═════╝ ╚═════╝
 --
 --   Murder Mystery 2  ·  native Roblox UI, no Drawing API
---   build 3.0.0+cd53379e  ·  2026-08-31 22:19 UTC
+--   build 3.0.0+4096bd21  ·  2026-08-31 22:23 UTC
 --
 --   GENERATED FILE — do not edit directly.
 --   Sources live in src/mm2/ ; rebuild with `python build.py`.
@@ -1350,13 +1350,12 @@ do
             })
         end
         local strokeColor = C.TextFaint
-        local bT, bL, bB, bR = 3
-        bar(UDim2.new(0, GRIP, 0, bT), UDim2.new(0, 0, 0, 0), strokeColor)                         -- top
-        bar(UDim2.new(0, bL, 0, GRIP), UDim2.new(0, 0, 0, 0), strokeColor)                        -- left
-        bar(UDim2.new(0, GRIP, 0, bB), UDim2.new(0, 0, 1, -bB), strokeColor)                      -- bottom
-        bar(UDim2.new(0, bR, 0, GRIP), UDim2.new(1, -bR, 0, 0), strokeColor)                      -- right
-        bar(UDim2.new(0, 18, 0, 4), UDim2.new(0, 8, 1, -22), strokeColor)                        -- inner
-        bar(UDim2.new(0, 4, 0, 18), UDim2.new(1, -22, 0, 8), strokeColor)                        -- inner
+        bar(UDim2.new(0, GRIP, 0, 3), UDim2.new(0, 0, 0, 0), strokeColor)                          -- top
+        bar(UDim2.new(0, 3, 0, GRIP), UDim2.new(0, 0, 0, 0), strokeColor)                          -- left
+        bar(UDim2.new(0, GRIP, 0, 3), UDim2.new(0, 0, 1, -3), strokeColor)                         -- bottom
+        bar(UDim2.new(0, 3, 0, GRIP), UDim2.new(1, -3, 0, 0), strokeColor)                         -- right
+        bar(UDim2.new(0, 18, 0, 4), UDim2.new(0, 8, 1, -22), strokeColor)                          -- inner
+        bar(UDim2.new(0, 4, 0, 18), UDim2.new(1, -22, 0, 8), strokeColor)                          -- inner
 
         -- visible accent bar tinted set (to re-tint on pulse we keep refs)
         local innerTop = bar(UDim2.new(0, 10, 0, 3), UDim2.new(0, 11, 1, -18), strokeColor)
