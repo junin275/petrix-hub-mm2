@@ -8,7 +8,7 @@
 --   ╚═╝  ╚═╝╚═╝   ╚═╝      ╚═╝      ╚═╝       ╚═╝  ╚═╝ ╚═════╝ ╚═════╝
 --
 --   Murder Mystery 2  ·  native Roblox UI, no Drawing API
---   build 3.0.0+4096bd21  ·  2026-08-31 22:23 UTC
+--   build 3.0.0+aab9c17e  ·  2026-08-31 22:27 UTC
 --
 --   GENERATED FILE — do not edit directly.
 --   Sources live in src/mm2/ ; rebuild with `python build.py`.
@@ -1430,7 +1430,6 @@ do
     -- A welcoming gate shown on first open: credits + disclaimer, dismissed
     -- with an OK button. Nothing abrupt — it fades in and out.
     function UI.welcome(callback)
-        local W, H = 470, 400
         local splash = make("ScreenGui", {
             Name = "KW_" .. tostring(math.random(100000, 999999)),
             ResetOnSpawn = false,
@@ -1441,21 +1440,26 @@ do
         })
         KH.own(splash)
 
-        local backdrop = make("Frame", {
+        -- backdrop
+        make("Frame", {
+            Name = "Backdrop",
             Size = UDim2.fromScale(1, 1),
-            BackgroundColor3 = Color3.fromRGB(5, 5, 8),
-            BackgroundTransparency = 0.45,
+            BackgroundColor3 = Color3.fromRGB(4, 4, 7),
+            BackgroundTransparency = 0.55,
             BorderSizePixel = 0,
             ZIndex = 1,
             Parent = splash,
         })
 
+        -- card (fixed size, centered, positioned manually)
+        local W, H = 440, 330
         local card = make("Frame", {
             AnchorPoint = Vector2.new(0.5, 0.5),
             Position = UDim2.fromScale(0.5, 0.5),
             Size = UDim2.fromOffset(W, H),
             BackgroundColor3 = C.Panel,
             BorderSizePixel = 0,
+            ClipsDescendants = true,
             ZIndex = 2,
             Parent = splash,
         })
@@ -1463,123 +1467,122 @@ do
         UI.stroke(card, C.Stroke, 1)
         UI.shadow(card, 30, 0.6)
 
-        -- accent top edge (direct child of card, OUTSIDE the body layout)
-        local accent = make("Frame", {
-            Size = UDim2.new(1, 0, 0, 4),
-            Position = UDim2.fromScale(0, 0),
+        -- accent top strip (child of card, z-above corner)
+        local strip = make("Frame", {
+            Size = UDim2.new(1, 0, 0, 5),
+            Position = UDim2.fromOffset(0, 0),
+            AnchorPoint = Vector2.new(0, 0),
             BackgroundColor3 = C.Accent,
             BorderSizePixel = 0,
-            ZIndex = 5,
-            Parent = card,
-        })
-        UI.accented(accent, "BackgroundColor3")
-
-        -- body carries the list layout; keeps accent/divider free of it
-        local body = make("Frame", {
-            Name = "Body",
-            Size = UDim2.new(1, -56, 1, -8),
-            AnchorPoint = Vector2.new(0.5, 0.5),
-            Position = UDim2.new(0.5, 0, 0.5, -2),
-            BackgroundTransparency = 1,
             ZIndex = 3,
             Parent = card,
         })
-        make("UIListLayout", {
-            HorizontalAlignment = Enum.HorizontalAlignment.Center,
-            SortOrder = Enum.SortOrder.LayoutOrder,
-            Padding = UDim.new(0, 9),
-            Parent = body,
+        UI.accented(strip, "BackgroundColor3")
+
+        -- title
+        local title = make("TextLabel", {
+            Text = "PETRIX HUB",
+            Font = Enum.Font.GothamBold,
+            TextSize = 34,
+            TextColor3 = C.Text,
+            BackgroundTransparency = 1,
+            AnchorPoint = Vector2.new(0.5, 0),
+            Position = UDim2.new(0.5, 0, 0, 34),
+            Size = UDim2.new(1, 0, 0, 40),
+            ZIndex = 4,
+            Parent = card,
         })
 
-        local order = 0
-        local function label(text, size, color, weight)
-            order = order + 1
-            return make("TextLabel", {
-                Text = text,
-                Font = weight or Enum.Font.GothamBold,
-                TextSize = size,
-                TextColor3 = color or C.Text,
-                BackgroundTransparency = 1,
-                LayoutOrder = order,
-                Size = UDim2.new(1, 0, 0, size + 8),
-                TextWrapped = true,
-                RichText = true,
-                Parent = body,
-            })
-        end
-
-        -- Title
-        label("PETRIX HUB", 30, C.Text)
-        label(("v" .. tostring(KH.Version)), 13, C.TextFaint, Enum.Font.Gotham)
-        label("", 4, C.TextFaint, Enum.Font.Gotham)
-
-        -- Divider (in the body flow)
-        order = order + 1
-        make("Frame", {
-            Size = UDim2.new(0.8, 0, 0, 1),
-            BackgroundColor3 = C.Stroke,
-            BorderSizePixel = 0,
-            LayoutOrder = order,
-            Parent = body,
-        })
-
-        order = order + 1
-        make("TextLabel", {
-            Text = "WORK IN PROGRESS",
+        -- version
+        local ver = make("TextLabel", {
+            Text = "v" .. tostring(KH.Version),
             Font = Enum.Font.Gotham,
-            TextSize = 11,
+            TextSize = 13,
             TextColor3 = C.TextFaint,
             BackgroundTransparency = 1,
-            LayoutOrder = order,
-            TextWrapped = true,
-            Parent = body,
+            AnchorPoint = Vector2.new(0.5, 0),
+            Position = UDim2.new(0.5, 0, 0, 76),
+            Size = UDim2.new(1, 0, 0, 20),
+            ZIndex = 4,
+            Parent = card,
         })
 
-        -- Credits
-        label("Inspirado no <b>Kitty Hub</b> (capyb2222/mm2-script), adaptado e rebranded para Petrix Hub.", 13, C.TextDim, Enum.Font.Gotham)
+        -- credits
+        local credit = make("TextLabel", {
+            Text = "Inspirado no Kitty Hub (capyb2222/mm2-script)\nadaptado e rebranded para Petrix Hub.",
+            Font = Enum.Font.Gotham,
+            TextSize = 14,
+            TextColor3 = C.TextDim,
+            BackgroundTransparency = 1,
+            AnchorPoint = Vector2.new(0.5, 0),
+            Position = UDim2.new(0.5, 0, 0, 116),
+            Size = UDim2.new(1, -40, 0, 44),
+            TextWrapped = true,
+            ZIndex = 4,
+            Parent = card,
+        })
 
-        -- Disclaimer
-        label("<font color='#E53935'>Use por sua conta e risco.</font> Script de terceiros para fins educacionais — pode violar os termos do Roblox.", 13, C.TextDim, Enum.Font.Gotham)
+        -- disclaimer
+        local warn = make("TextLabel", {
+            Text = "Use por sua conta e risco.\nScript de terceiros para fins educacionais — pode violar os termos do Roblox.",
+            Font = Enum.Font.Gotham,
+            TextSize = 13,
+            TextColor3 = Color3.fromRGB(235, 120, 120),
+            BackgroundTransparency = 1,
+            AnchorPoint = Vector2.new(0.5, 0),
+            Position = UDim2.new(0.5, 0, 0, 178),
+            Size = UDim2.new(1, -60, 0, 52),
+            TextWrapped = true,
+            ZIndex = 4,
+            Parent = card,
+        })
 
         -- OK button
         local okBtn = make("TextButton", {
             Text = "OK",
             Font = Enum.Font.GothamBold,
-            TextSize = 16,
+            TextSize = 17,
             TextColor3 = Color3.new(1, 1, 1),
             AutoButtonColor = false,
             BackgroundColor3 = C.Accent,
             BorderSizePixel = 0,
-            Size = UDim2.fromOffset(150, 42),
-            LayoutOrder = order + 1,
-            ZIndex = 4,
-            Parent = body,
+            AnchorPoint = Vector2.new(0.5, 0),
+            Position = UDim2.new(0.5, 0, 0, 252),
+            Size = UDim2.fromOffset(150, 46),
+            ZIndex = 5,
+            Parent = card,
         })
-        UI.corner(okBtn, 21)
+        UI.corner(okBtn, 23)
         UI.accented(okBtn, "BackgroundColor3")
-        okBtn.MouseEnter:Connect(function() tween(okBtn, 0.12, {Size = UDim2.fromOffset(158, 44)}) end)
-        okBtn.MouseLeave:Connect(function() tween(okBtn, 0.12, {Size = UDim2.fromOffset(150, 42)}) end)
+        okBtn.MouseEnter:Connect(function() tween(okBtn, 0.12, {Size = UDim2.fromOffset(160, 49)}) end)
+        okBtn.MouseLeave:Connect(function() tween(okBtn, 0.12, {Size = UDim2.fromOffset(150, 46)}) end)
 
-        -- Entrance animation
+        -- entrance: fade + settle, robust via pcall so nothing blocks OK
         card.Position = UDim2.new(0.5, 0, 0.53, 0)
         card.BackgroundTransparency = 1
-        card.Size = UDim2.fromOffset(W * 1.04, H * 1.04)
-        tween(card, 0.28, {
-            BackgroundTransparency = 0,
-            Position = UDim2.new(0.5, 0, 0.5, 0),
-            Size = UDim2.fromOffset(W, H),
-        }, Enum.EasingStyle.Out, Enum.EasingDirection.Quad)
+        pcall(function() UI.shadow(card, 30, 0.6) end)
+        pcall(function()
+            tween(card, 0.28, {BackgroundTransparency = 0, Position = UDim2.new(0.5, 0, 0.5, 0)},
+                Enum.EasingStyle.Out, Enum.EasingDirection.Quad)
+        end)
 
         local done = false
-        okBtn.MouseButton1Click:Connect(function()
+        local function dismiss()
             if done then return end
             done = true
-            tween(card, 0.18, {BackgroundTransparency = 1}, Enum.EasingStyle.In, Enum.EasingDirection.Quad)
-            tween(backdrop, 0.18, {BackgroundTransparency = 1}, Enum.EasingStyle.In, Enum.EasingDirection.Quad)
-            task.delay(0.18, function()
+            local ok = pcall(function()
+                tween(card, 0.16, {BackgroundTransparency = 1}, Enum.EasingStyle.In, Enum.EasingDirection.Quad)
+            end)
+            if not ok then card.BackgroundTransparency = 1 end
+            task.delay(0.16, function()
                 pcall(function() splash:Destroy() end)
                 if callback then pcall(callback) end
             end)
+        end
+
+        okBtn.MouseButton1Click:Connect(dismiss)
+        okBtn.InputBegan:Connect(function(input) -- fallback so touch/mobile works
+            if input.UserInputType == Enum.UserInputType.Touch then dismiss() end
         end)
 
         return splash
