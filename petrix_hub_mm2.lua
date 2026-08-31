@@ -8,7 +8,7 @@
 --   ╚═╝  ╚═╝╚═╝   ╚═╝      ╚═╝      ╚═╝       ╚═╝  ╚═╝ ╚═════╝ ╚═════╝
 --
 --   Murder Mystery 2  ·  native Roblox UI, no Drawing API
---   build 3.0.0+cca1c72c  ·  2026-08-31 22:31 UTC
+--   build 3.0.0+aaa78383  ·  2026-08-31 22:33 UTC
 --
 --   GENERATED FILE — do not edit directly.
 --   Sources live in src/mm2/ ; rebuild with `python build.py`.
@@ -1337,37 +1337,37 @@ do
             Parent = Root,
         })
 
-        -- corner outline drawn with two bars (a clear "grab" handle)
-        local function bar(size, pos, color, thickness)
-            return make("Frame", {
-                Size = size,
-                Position = pos,
-                BackgroundColor3 = color,
-                BackgroundTransparency = 0,
-                BorderSizePixel = 0,
-                ZIndex = 51,
-                Parent = grip,
-            })
-        end
+        -- single clean "L" corner handle (2 bars, no duplicated outline)
         local strokeColor = C.TextFaint
-        bar(UDim2.new(0, GRIP, 0, 3), UDim2.new(0, 0, 0, 0), strokeColor)                          -- top
-        bar(UDim2.new(0, 3, 0, GRIP), UDim2.new(0, 0, 0, 0), strokeColor)                          -- left
-        bar(UDim2.new(0, GRIP, 0, 3), UDim2.new(0, 0, 1, -3), strokeColor)                         -- bottom
-        bar(UDim2.new(0, 3, 0, GRIP), UDim2.new(1, -3, 0, 0), strokeColor)                         -- right
-        bar(UDim2.new(0, 18, 0, 4), UDim2.new(0, 8, 1, -22), strokeColor)                          -- inner
-        bar(UDim2.new(0, 4, 0, 18), UDim2.new(1, -22, 0, 8), strokeColor)                          -- inner
-
-        -- visible accent bar tinted set (to re-tint on pulse we keep refs)
-        local innerTop = bar(UDim2.new(0, 10, 0, 3), UDim2.new(0, 11, 1, -18), strokeColor)
-        local innerSide = bar(UDim2.new(0, 3, 0, 10), UDim2.new(1, -18, 0, 11), strokeColor)
+        local TH = 3
+        local cornerTop = make("Frame", {
+            Size = UDim2.new(0, 30, 0, TH),
+            Position = UDim2.new(0, 0, 1, -TH),
+            AnchorPoint = Vector2.new(0, 1),
+            BackgroundColor3 = strokeColor,
+            BackgroundTransparency = 0,
+            BorderSizePixel = 0,
+            ZIndex = 51,
+            Parent = grip,
+        })
+        local cornerSide = make("Frame", {
+            Size = UDim2.new(0, TH, 0, 30),
+            Position = UDim2.new(0, 0, 1, 0),
+            AnchorPoint = Vector2.new(0, 1),
+            BackgroundColor3 = strokeColor,
+            BackgroundTransparency = 0,
+            BorderSizePixel = 0,
+            ZIndex = 51,
+            Parent = grip,
+        })
 
         local pulse = 0
         local dragging = false
         local lastPos
 
         local function setStroke(col)
-            innerTop.BackgroundColor3 = col
-            innerSide.BackgroundColor3 = col
+            cornerTop.BackgroundColor3 = col
+            cornerSide.BackgroundColor3 = col
         end
 
         grip.InputBegan:Connect(function(input)
