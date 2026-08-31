@@ -8,7 +8,7 @@
 --   ╚═╝  ╚═╝╚═╝   ╚═╝      ╚═╝      ╚═╝       ╚═╝  ╚═╝ ╚═════╝ ╚═════╝
 --
 --   Murder Mystery 2  ·  native Roblox UI, no Drawing API
---   build 3.0.0+2dce3b01  ·  2026-08-31 21:48 UTC
+--   build 3.0.0+8367b263  ·  2026-08-31 21:54 UTC
 --
 --   GENERATED FILE — do not edit directly.
 --   Sources live in src/mm2/ ; rebuild with `python build.py`.
@@ -287,7 +287,7 @@ do
         },
         UI = {
             MenuKey       = "X",
-            Accent        = Color3.fromRGB(178, 118, 255),
+            Accent        = Color3.fromRGB(229, 57, 53),
             Watermark     = true,
             KeybindList   = true,
             Notifications = true,
@@ -5437,6 +5437,7 @@ do
     end
 
     -- ================================================================ BOOT
+    local RED_ACCENT = Color3.fromRGB(229, 57, 53)
     if Config.available then
         local ok = Config.load(S.UI.Profile)
         if ok then
@@ -5444,6 +5445,7 @@ do
             UI.applyAccent(S.UI.Accent)
         end
     end
+    UI.applyAccent(RED_ACCENT) -- Petrix theme: force red over any saved accent
 
     -- Bring the world into line with whatever the loaded profile says.
     Move.applyHumanoid()
