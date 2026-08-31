@@ -8,7 +8,7 @@
 --   ╚═╝  ╚═╝╚═╝   ╚═╝      ╚═╝      ╚═╝       ╚═╝  ╚═╝ ╚═════╝ ╚═════╝
 --
 --   Murder Mystery 2  ·  native Roblox UI, no Drawing API
---   build 3.0.0+2042df2d  ·  2026-08-31 22:06 UTC
+--   build 3.0.0+aa4052d7  ·  2026-08-31 22:12 UTC
 --
 --   GENERATED FILE — do not edit directly.
 --   Sources live in src/mm2/ ; rebuild with `python build.py`.
@@ -1325,39 +1325,62 @@ do
     -- Hold the grip to resize the whole hub. While held it pulses.
     local function resizeGrip()
         local MIN_W, MIN_H, MAX_W, MAX_H = 420, 300, 1000, 700
+        local GRIP = 34
+
         local grip = make("Frame", {
             Name = "ResizeGrip",
-            Size = UDim2.fromOffset(20, 20),
-            Position = UDim2.new(1, -22, 1, -22),
+            Size = UDim2.fromOffset(GRIP, GRIP),
+            Position = UDim2.new(1, -8, 1, -8),
+            AnchorPoint = Vector2.new(1, 1),
             BackgroundTransparency = 1,
-            ZIndex = 20,
+            ZIndex = 50,
             Parent = Root,
         })
-        local glyph = make("TextLabel", {
-            Text = "◣",
-            Font = Enum.Font.GothamBold,
-            TextSize = 13,
-            TextColor3 = C.TextFaint,
-            BackgroundTransparency = 1,
-            Parent = grip,
-        })
+
+        -- corner outline drawn with two bars (a clear "grab" handle)
+        local function bar(size, pos, color, thickness)
+            return make("Frame", {
+                Size = size,
+                Position = pos,
+                BackgroundColor3 = color,
+                BackgroundTransparency = 0,
+                BorderSizePixel = 0,
+                ZIndex = 51,
+                Parent = grip,
+            })
+        end
+        local strokeColor = C.TextFaint
+        local bT, bL, bB, bR = 3
+        bar(UDim2.new(0, GRIP, 0, bT), UDim2.new(0, 0, 0, 0), strokeColor)                         -- top
+        bar(UDim2.new(0, bL, 0, GRIP), UDim2.new(0, 0, 0, 0), strokeColor)                        -- left
+        bar(UDim2.new(0, GRIP, 0, bB), UDim2.new(0, 0, 1, -bB), strokeColor)                      -- bottom
+        bar(UDim2.new(0, bR, 0, GRIP), UDim2.new(1, -bR, 0, 0), strokeColor)                      -- right
+        bar(UDim2.new(0, 18, 0, 4), UDim2.new(0, 8, 1, -22), strokeColor)                        -- inner
+        bar(UDim2.new(0, 4, 0, 18), UDim2.new(1, -22, 0, 8), strokeColor)                        -- inner
+
+        -- visible accent bar tinted set (to re-tint on pulse we keep refs)
+        local innerTop = bar(UDim2.new(0, 10, 0, 3), UDim2.new(0, 11, 1, -18), strokeColor)
+        local innerSide = bar(UDim2.new(0, 3, 0, 10), UDim2.new(1, -18, 0, 11), strokeColor)
+
         local pulse = 0
         local dragging = false
-        local startSize, startMouse
+        local lastPos
+
+        local function setStroke(col)
+            innerTop.BackgroundColor3 = col
+            innerSide.BackgroundColor3 = col
+        end
 
         grip.InputBegan:Connect(function(input)
             if input.UserInputType == Enum.UserInputType.MouseButton1
                 or input.UserInputType == Enum.UserInputType.Touch then
                 dragging = true
-                startSize = Root.Size
-                startMouse = input.Position
-                grip.BackgroundTransparency = 0
-                grip.BackgroundColor3 = C.Accent
-                grip.ZIndex = 25
+                lastPos = input.Position
+                setStroke(C.Accent)
                 input.Changed:Connect(function()
                     if input.UserInputState == Enum.UserInputState.End then
                         dragging = false
-                        grip.BackgroundTransparency = 1
+                        setStroke(C.TextFaint)
                     end
                 end)
                 if UI.PulseOn then pcall(UI.StartPulse) end
@@ -1367,33 +1390,38 @@ do
             if input.UserInputType == Enum.UserInputType.MouseButton1
                 or input.UserInputType == Enum.UserInputType.Touch then
                 dragging = false
-                grip.BackgroundTransparency = 1
+                setStroke(C.TextFaint)
                 if UI.StopPulse then pcall(UI.StopPulse) end
             end
         end)
-        KH.track(UserInputService.InputChanged:Connect(function(input)
+
+        -- Resilient drag: accumulate per-event delta so slow or fast touch both work.
+        local conn
+        conn = UserInputService.InputChanged:Connect(function(input)
             if not dragging then return end
-            if input.UserInputType == Enum.UserInputType.MouseMovement
-                or input.UserInputType == Enum.UserInputType.Touch then
-                local dx, dy = input.Position.X - startMouse.X, input.Position.Y - startMouse.Y
-                local nw = math.clamp(startSize.X.Offset + dx, MIN_W, MAX_W)
-                local nh = math.clamp(startSize.Y.Offset + dy, MIN_H, MAX_H)
-                WIN_W, WIN_H = nw, nh
-                Root.Size = UDim2.fromOffset(WIN_W, WIN_H)
-            end
-        end))
+            if input.UserInputType ~= Enum.UserInputType.MouseMovement
+                and input.UserInputType ~= Enum.UserInputType.Touch then return end
+            local dx = input.Position.X - lastPos.X
+            local dy = input.Position.Y - lastPos.Y
+            local nw = math.clamp(Root.Size.X.Offset + dx, MIN_W, MAX_W)
+            local nh = math.clamp(Root.Size.Y.Offset + dy, MIN_H, MAX_H)
+            WIN_W, WIN_H = nw, nh
+            Root.Size = UDim2.fromOffset(WIN_W, WIN_H)
+            lastPos = input.Position
+        end)
 
         local heart = game:GetService("RunService").Heartbeat:Connect(function(dt)
             if dragging then
-                pulse = (pulse or 0) + (dt or 0.016) * 5
-                local s = 0.90 + 0.10 * (0.5 + 0.5 * math.sin(pulse))
-                grip.Size = UDim2.fromOffset(20 * s, 20 * s)
-                grip.Position = UDim2.new(1, -22 * s, 1, -22 * s)
+                pulse = (pulse or 0) + (dt or 0.016) * 6
+                local s = 0.92 + 0.12 * (0.5 + 0.5 * math.sin(pulse))
+                grip.Size = UDim2.fromOffset(GRIP * s, GRIP * s)
+                grip.Position = UDim2.new(1, -8, 1, -8)
             end
         end)
 
         UI._resizeHandles = UI._resizeHandles or {}
         table.insert(UI._resizeHandles, heart)
+        table.insert(UI._resizeHandles, conn)
         return grip
     end
 
