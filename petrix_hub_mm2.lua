@@ -8,7 +8,7 @@
 --   ╚═╝  ╚═╝╚═╝   ╚═╝      ╚═╝      ╚═╝       ╚═╝  ╚═╝ ╚═════╝ ╚═════╝
 --
 --   Murder Mystery 2  ·  native Roblox UI, no Drawing API
---   build 3.0.0+aa4052d7  ·  2026-08-31 22:12 UTC
+--   build 3.0.0+cd53379e  ·  2026-08-31 22:19 UTC
 --
 --   GENERATED FILE — do not edit directly.
 --   Sources live in src/mm2/ ; rebuild with `python build.py`.
@@ -1426,6 +1426,165 @@ do
     end
 
     UI.resizeGrip = resizeGrip
+
+    -- --------------------------------------------------- welcome / splash
+    -- A welcoming gate shown on first open: credits + disclaimer, dismissed
+    -- with an OK button. Nothing abrupt — it fades in and out.
+    function UI.welcome(callback)
+        local W, H = 470, 400
+        local splash = make("ScreenGui", {
+            Name = "KW_" .. tostring(math.random(100000, 999999)),
+            ResetOnSpawn = false,
+            IgnoreGuiInset = true,
+            ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+            DisplayOrder = 10002,
+            Parent = UI.Overlay.Parent,
+        })
+        KH.own(splash)
+
+        local backdrop = make("Frame", {
+            Size = UDim2.fromScale(1, 1),
+            BackgroundColor3 = Color3.fromRGB(5, 5, 8),
+            BackgroundTransparency = 0.45,
+            BorderSizePixel = 0,
+            ZIndex = 1,
+            Parent = splash,
+        })
+
+        local card = make("Frame", {
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            Position = UDim2.fromScale(0.5, 0.5),
+            Size = UDim2.fromOffset(W, H),
+            BackgroundColor3 = C.Panel,
+            BorderSizePixel = 0,
+            ZIndex = 2,
+            Parent = splash,
+        })
+        UI.corner(card, 18)
+        UI.stroke(card, C.Stroke, 1)
+        UI.shadow(card, 30, 0.6)
+
+        -- accent top edge (direct child of card, OUTSIDE the body layout)
+        local accent = make("Frame", {
+            Size = UDim2.new(1, 0, 0, 4),
+            Position = UDim2.fromScale(0, 0),
+            BackgroundColor3 = C.Accent,
+            BorderSizePixel = 0,
+            ZIndex = 5,
+            Parent = card,
+        })
+        UI.accented(accent, "BackgroundColor3")
+
+        -- body carries the list layout; keeps accent/divider free of it
+        local body = make("Frame", {
+            Name = "Body",
+            Size = UDim2.new(1, -56, 1, -8),
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            Position = UDim2.new(0.5, 0, 0.5, -2),
+            BackgroundTransparency = 1,
+            ZIndex = 3,
+            Parent = card,
+        })
+        make("UIListLayout", {
+            HorizontalAlignment = Enum.HorizontalAlignment.Center,
+            SortOrder = Enum.SortOrder.LayoutOrder,
+            Padding = UDim.new(0, 9),
+            Parent = body,
+        })
+
+        local order = 0
+        local function label(text, size, color, weight)
+            order = order + 1
+            return make("TextLabel", {
+                Text = text,
+                Font = weight or Enum.Font.GothamBold,
+                TextSize = size,
+                TextColor3 = color or C.Text,
+                BackgroundTransparency = 1,
+                LayoutOrder = order,
+                Size = UDim2.new(1, 0, 0, size + 8),
+                TextWrapped = true,
+                RichText = true,
+                Parent = body,
+            })
+        end
+
+        -- Title
+        label("PETRIX HUB", 30, C.Text)
+        label(("v" .. tostring(KH.Version)), 13, C.TextFaint, Enum.Font.Gotham)
+        label("", 4, C.TextFaint, Enum.Font.Gotham)
+
+        -- Divider (in the body flow)
+        order = order + 1
+        make("Frame", {
+            Size = UDim2.new(0.8, 0, 0, 1),
+            BackgroundColor3 = C.Stroke,
+            BorderSizePixel = 0,
+            LayoutOrder = order,
+            Parent = body,
+        })
+
+        order = order + 1
+        make("TextLabel", {
+            Text = "WORK IN PROGRESS",
+            Font = Enum.Font.Gotham,
+            TextSize = 11,
+            TextColor3 = C.TextFaint,
+            BackgroundTransparency = 1,
+            LayoutOrder = order,
+            TextWrapped = true,
+            Parent = body,
+        })
+
+        -- Credits
+        label("Inspirado no <b>Kitty Hub</b> (capyb2222/mm2-script), adaptado e rebranded para Petrix Hub.", 13, C.TextDim, Enum.Font.Gotham)
+
+        -- Disclaimer
+        label("<font color='#E53935'>Use por sua conta e risco.</font> Script de terceiros para fins educacionais — pode violar os termos do Roblox.", 13, C.TextDim, Enum.Font.Gotham)
+
+        -- OK button
+        local okBtn = make("TextButton", {
+            Text = "OK",
+            Font = Enum.Font.GothamBold,
+            TextSize = 16,
+            TextColor3 = Color3.new(1, 1, 1),
+            AutoButtonColor = false,
+            BackgroundColor3 = C.Accent,
+            BorderSizePixel = 0,
+            Size = UDim2.fromOffset(150, 42),
+            LayoutOrder = order + 1,
+            ZIndex = 4,
+            Parent = body,
+        })
+        UI.corner(okBtn, 21)
+        UI.accented(okBtn, "BackgroundColor3")
+        okBtn.MouseEnter:Connect(function() tween(okBtn, 0.12, {Size = UDim2.fromOffset(158, 44)}) end)
+        okBtn.MouseLeave:Connect(function() tween(okBtn, 0.12, {Size = UDim2.fromOffset(150, 42)}) end)
+
+        -- Entrance animation
+        card.Position = UDim2.new(0.5, 0, 0.53, 0)
+        card.BackgroundTransparency = 1
+        card.Size = UDim2.fromOffset(W * 1.04, H * 1.04)
+        tween(card, 0.28, {
+            BackgroundTransparency = 0,
+            Position = UDim2.new(0.5, 0, 0.5, 0),
+            Size = UDim2.fromOffset(W, H),
+        }, Enum.EasingStyle.Out, Enum.EasingDirection.Quad)
+
+        local done = false
+        okBtn.MouseButton1Click:Connect(function()
+            if done then return end
+            done = true
+            tween(card, 0.18, {BackgroundTransparency = 1}, Enum.EasingStyle.In, Enum.EasingDirection.Quad)
+            tween(backdrop, 0.18, {BackgroundTransparency = 1}, Enum.EasingStyle.In, Enum.EasingDirection.Quad)
+            task.delay(0.18, function()
+                pcall(function() splash:Destroy() end)
+                if callback then pcall(callback) end
+            end)
+        end)
+
+        return splash
+    end
 
     -- A soft accent wash across the top edge, so the window reads as themed
     -- rather than as a flat grey box.
@@ -5561,12 +5720,13 @@ do
     Move.applyHumanoid()
     if S.Move.Noclip then Move.setNoclip(true) end
     UI.refreshKeybinds()
-    UI.setOpen(true)
 
-    -- The sidebar indicator is placed from AbsolutePosition, which is still
-    -- zero until the window has been laid out for a frame.
-    task.delay(0.35, function()
-        if KH.Alive then UI.selectTab(UI.ActiveTab or "Aimbot") end
+    -- Welcome gate first: credits + disclaimer, OK opens the menu.
+    UI.welcome(function()
+        UI.setOpen(true)
+        task.delay(0.35, function()
+            if KH.Alive then UI.selectTab(UI.ActiveTab or "Aimbot") end
+        end)
     end)
 
     if game.PlaceId ~= 142823291 then
