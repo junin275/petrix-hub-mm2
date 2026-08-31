@@ -8,7 +8,7 @@
 --   ╚═╝  ╚═╝╚═╝   ╚═╝      ╚═╝      ╚═╝       ╚═╝  ╚═╝ ╚═════╝ ╚═════╝
 --
 --   Murder Mystery 2  ·  native Roblox UI, no Drawing API
---   build 3.0.0+b0d28089  ·  2026-08-31 22:03 UTC
+--   build 3.0.0+2042df2d  ·  2026-08-31 22:06 UTC
 --
 --   GENERATED FILE — do not edit directly.
 --   Sources live in src/mm2/ ; rebuild with `python build.py`.
@@ -1345,13 +1345,6 @@ do
         local dragging = false
         local startSize, startMouse
 
-        function grip.Pulse(dt)
-            pulse = (pulse or 0) + dt * 5
-            local s = 0.90 + 0.10 * (0.5 + 0.5 * math.sin(pulse))
-            grip.Size = UDim2.fromOffset(20 * s, 20 * s)
-            grip.Position = UDim2.new(1, -22 * s, 1, -22 * s)
-        end
-
         grip.InputBegan:Connect(function(input)
             if input.UserInputType == Enum.UserInputType.MouseButton1
                 or input.UserInputType == Enum.UserInputType.Touch then
@@ -1391,7 +1384,12 @@ do
         end))
 
         local heart = game:GetService("RunService").Heartbeat:Connect(function(dt)
-            if dragging then grip.Pulse(dt or 0.016) end
+            if dragging then
+                pulse = (pulse or 0) + (dt or 0.016) * 5
+                local s = 0.90 + 0.10 * (0.5 + 0.5 * math.sin(pulse))
+                grip.Size = UDim2.fromOffset(20 * s, 20 * s)
+                grip.Position = UDim2.new(1, -22 * s, 1, -22 * s)
+            end
         end)
 
         UI._resizeHandles = UI._resizeHandles or {}
