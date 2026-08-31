@@ -8,7 +8,7 @@
 --   ╚═╝  ╚═╝╚═╝   ╚═╝      ╚═╝      ╚═╝       ╚═╝  ╚═╝ ╚═════╝ ╚═════╝
 --
 --   Murder Mystery 2  ·  native Roblox UI, no Drawing API
---   build 3.0.0+3697944d  ·  2026-08-31 21:59 UTC
+--   build 3.0.0+b0d28089  ·  2026-08-31 22:03 UTC
 --
 --   GENERATED FILE — do not edit directly.
 --   Sources live in src/mm2/ ; rebuild with `python build.py`.
@@ -1353,32 +1353,42 @@ do
         end
 
         grip.InputBegan:Connect(function(input)
-            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            if input.UserInputType == Enum.UserInputType.MouseButton1
+                or input.UserInputType == Enum.UserInputType.Touch then
                 dragging = true
                 startSize = Root.Size
                 startMouse = input.Position
                 grip.BackgroundTransparency = 0
                 grip.BackgroundColor3 = C.Accent
                 grip.ZIndex = 25
+                input.Changed:Connect(function()
+                    if input.UserInputState == Enum.UserInputState.End then
+                        dragging = false
+                        grip.BackgroundTransparency = 1
+                    end
+                end)
                 if UI.PulseOn then pcall(UI.StartPulse) end
             end
         end)
         grip.InputEnded:Connect(function(input)
-            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            if input.UserInputType == Enum.UserInputType.MouseButton1
+                or input.UserInputType == Enum.UserInputType.Touch then
                 dragging = false
                 grip.BackgroundTransparency = 1
                 if UI.StopPulse then pcall(UI.StopPulse) end
             end
         end)
-        grip.InputChanged:Connect(function(input)
-            if input.UserInputType == Enum.UserInputType.MouseMovement and dragging then
+        KH.track(UserInputService.InputChanged:Connect(function(input)
+            if not dragging then return end
+            if input.UserInputType == Enum.UserInputType.MouseMovement
+                or input.UserInputType == Enum.UserInputType.Touch then
                 local dx, dy = input.Position.X - startMouse.X, input.Position.Y - startMouse.Y
                 local nw = math.clamp(startSize.X.Offset + dx, MIN_W, MAX_W)
                 local nh = math.clamp(startSize.Y.Offset + dy, MIN_H, MAX_H)
                 WIN_W, WIN_H = nw, nh
                 Root.Size = UDim2.fromOffset(WIN_W, WIN_H)
             end
-        end)
+        end))
 
         local heart = game:GetService("RunService").Heartbeat:Connect(function(dt)
             if dragging then grip.Pulse(dt or 0.016) end
