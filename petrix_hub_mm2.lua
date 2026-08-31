@@ -8,7 +8,7 @@
 --   ╚═╝  ╚═╝╚═╝   ╚═╝      ╚═╝      ╚═╝       ╚═╝  ╚═╝ ╚═════╝ ╚═════╝
 --
 --   Murder Mystery 2  ·  native Roblox UI, no Drawing API
---   build 3.0.0+c38f55a3  ·  2026-08-31 22:44 UTC
+--   build 3.0.0+ab3bcb35  ·  2026-08-31 22:50 UTC
 --
 --   GENERATED FILE — do not edit directly.
 --   Sources live in src/mm2/ ; rebuild with `python build.py`.
@@ -293,6 +293,10 @@ do
             Notifications = true,
             AutoSave      = true,
             Profile       = "default",
+        },
+        Quick = {
+            Coords = {},   -- name -> {X = 0..1, Y = 0..1} for floating hotkeys
+            Hidden = {},   -- name -> bool, collapse each quick action
         },
     }
     KH.Defaults = DEFAULTS
@@ -5755,4 +5759,292 @@ do
     print(("[Petrix Hub] v%s loaded — executor: %s"):format(KH.Version, KH.X.name))
     print(("[Petrix Hub] [%s] menu · [%s] aim · [%s] noclip · [%s] fly")
         :format(S.UI.MenuKey, S.Aim.Key, S.Move.NoclipKey, S.Move.FlyKey))
+end
+
+-- ─── src/mm2/15_quick.lua ──────────────────────────────────────────────
+
+-- ============================================================================
+--  QUICK ACCESS — floating draggable hot-buttons pinned to the screen
+-- ============================================================================
+-- Floating action buttons live on the Overlay (above the menu). Each one maps
+-- to a fast action; pressing it toggles the feature and it gets pinned to
+-- wherever you drag it. The Aimbot button draws a spinning crosshair.
+-- ============================================================================
+
+do
+    local UI, C, S = KH.UI, KH.UI.C, KH.S
+    local Move      = KH.Move
+    local Config    = KH.Config
+    local make      = UI.make
+    local UserInputService = KH.Services.UserInputService
+    local RunService       = KH.Services.RunService
+
+    local Overlay = UI.Overlay
+
+    -- Persisted quick-bar surface: which buttons are shown, where they sit.
+    S.Quick = S.Quick or { Coords = {}, Hidden = {} }
+    local QP = S.Quick
+    QP.Coords = QP.Coords or {}
+    QP.Hidden = QP.Hidden or {}
+
+    -- ------------------------------------------------------------ actions
+    local function refreshAllUI()
+        if UI.refreshAll then pcall(UI.refreshAll) end
+    end
+
+    local ACTIONS = {
+        Aimbot = {
+            label = "Aimbot",
+            crosshair = true,
+            get  = function() return S.Aim.Enabled end,
+            set  = function(v)
+                S.Aim.Enabled = v
+                refreshAllUI()
+            end,
+        },
+        Fly = {
+            label = "Fly",
+            glyph = "F L Y",
+            get  = function() return S.Move.Fly end,
+            set  = function(v) Move.setFly(v) end,
+        },
+        Noclip = {
+            label = "Noclip",
+            glyph = "N C P",
+            get  = function() return S.Move.Noclip end,
+            set  = function(v) Move.setNoclip(v) end,
+        },
+        ESP = {
+            label = "ESP",
+            glyph = "E S P",
+            get  = function() return S.ESP.Enabled end,
+            set  = function(v)
+                S.ESP.Enabled = v
+                refreshAllUI()
+            end,
+        },
+        Speed = {
+            label = "Speed",
+            glyph = "S P D",
+            get  = function() return S.Move.SpeedEnabled end,
+            set  = function(v)
+                S.Move.SpeedEnabled = v
+                Move.applyHumanoid()
+                refreshAllUI()
+            end,
+        },
+    }
+
+    -- ------------------------------------------------------ button factory
+    local BTN = 58
+    local buttons = {}      -- name -> {frame, glowBits, refresh}
+    local spinning = {}     -- crosshair rotation jobs
+
+    local function persist(name)
+        if not Config.available then return end
+        local ok = pcall(function() Config.save(S.UI.Profile) end)
+    end
+
+    local function makeButton(name, act, index)
+        local frame = make("Frame", {
+            Name = "Quick_" .. name,
+            Size = UDim2.fromOffset(BTN, BTN),
+            Position = UDim2.fromScale(0.015, 0.16 + index * 0.115),
+            BackgroundColor3 = C.Panel,
+            BackgroundTransparency = 0.25,
+            BorderSizePixel = 0,
+            ZIndex = 90,
+            Parent = Overlay,
+        })
+        KH.own(frame)
+        UI.corner(frame, 11)
+        UI.stroke(frame, C.Stroke, 1, 0)
+
+        -- accent glow behind the whole button (animated when active)
+        local glow = make("Frame", {
+            Size = UDim2.fromScale(1, 1),
+            BackgroundColor3 = C.Accent,
+            BackgroundTransparency = 1,
+            BorderSizePixel = 0,
+            ZIndex = 89,
+            Parent = frame,
+        })
+        UI.corner(glow, 11)
+        UI.accented(glow, "BackgroundColor3")
+
+        local iconSpot = make("Frame", {
+            Size = UDim2.new(1, 0, 0, 40),
+            Position = UDim2.fromScale(0, 0),
+            BackgroundTransparency = 1,
+            Parent = frame,
+        })
+
+        -- icon: spinning crosshair for Aimbot, text glyph otherwise
+        local iconBits = {}
+        if act.crosshair then
+            local ring = make("Frame", {
+                AnchorPoint = Vector2.new(0.5, 0.5),
+                Position = UDim2.new(0.5, 0, 0.5, 0),
+                BackgroundTransparency = 1,
+                Parent = iconSpot,
+            })
+            local function crossBar(w, h)
+                return make("Frame", {
+                    AnchorPoint = Vector2.new(0.5, 0.5),
+                    Position = UDim2.new(0.5, 0, 0.5, 0),
+                    Size = UDim2.fromOffset(w, h),
+                    BackgroundColor3 = C.Text,
+                    BackgroundTransparency = 0,
+                    BorderSizePixel = 0,
+                    Parent = ring,
+                })
+            end
+            local horiz = crossBar(24, 3)
+            local vert  = crossBar(3, 24)
+            local dot = make("Frame", {
+                AnchorPoint = Vector2.new(0.5, 0.5),
+                Position = UDim2.new(0.5, 0, 0.5, 0),
+                Size = UDim2.fromOffset(5, 5),
+                BackgroundColor3 = C.Text,
+                BackgroundTransparency = 0,
+                BorderSizePixel = 0,
+                Parent = ring,
+            })
+            UI.corner(dot, 3)
+            iconBits.ring = ring
+            iconBits.horiz = horiz
+            iconBits.vert = vert
+            iconBits.dot = dot
+        else
+            local gl = make("TextLabel", {
+                Text = act.glyph or act.label,
+                Font = Enum.Font.GothamBold,
+                TextSize = 11,
+                TextColor3 = C.TextDim,
+                BackgroundTransparency = 1,
+                Size = UDim2.new(1, 0, 0, 40),
+                Parent = iconSpot,
+            })
+            iconBits.gl = gl
+        end
+
+        local label = make("TextLabel", {
+            Text = act.label,
+            Font = Enum.Font.GothamBold,
+            TextSize = 11,
+            TextColor3 = C.TextDim,
+            BackgroundTransparency = 1,
+            Position = UDim2.fromOffset(0, 38),
+            Size = UDim2.new(1, 0, 0, 16),
+            Parent = frame,
+        })
+
+        -- ---- drag (pin on release) + tap to toggle
+        local dragging = false
+        local moved = false
+        local lastPos
+
+        local function applyVisual()
+            local on = act.get and act.get() or false
+            local target = on and {BackgroundTransparency = 0.25} or {BackgroundTransparency = 0.55}
+            UI.tween(frame, 0.12, {
+                BackgroundTransparency = on and 0.25 or 0.55,
+                BackgroundColor3 = on and C.Card or C.Panel,
+            })
+            UI.tween(glow, 0.12, {BackgroundTransparency = on and 0.9 or 1})
+            UI.tween(label, 0.12, {TextColor3 = on and C.Accent or C.TextDim})
+            if iconBits.ring then
+                UI.tween(iconBits.horiz, 0.12, {BackgroundColor3 = on and C.Accent or C.Text})
+                UI.tween(iconBits.vert, 0.12, {BackgroundColor3 = on and C.Accent or C.Text})
+                UI.tween(iconBits.dot, 0.12, {BackgroundColor3 = on and C.Accent or C.Text})
+            elseif iconBits.gl then
+                UI.tween(iconBits.gl, 0.12, {TextColor3 = on and C.Accent or C.TextDim})
+            end
+        end
+
+        frame.InputBegan:Connect(function(input)
+            if input.UserInputType ~= Enum.UserInputType.MouseButton1
+                and input.UserInputType ~= Enum.UserInputType.Touch then return end
+            dragging = true
+            moved = false
+            lastPos = input.Position
+        end)
+        frame.InputEnded:Connect(function(input)
+            if input.UserInputType ~= Enum.UserInputType.MouseButton1
+                and input.UserInputType ~= Enum.UserInputType.Touch then return end
+            if dragging and not moved then
+                -- tap: toggle the action
+                local cur = act.get and act.get() or false
+                act.set(not cur)
+                applyVisual()
+            end
+            dragging = false
+        end)
+        -- live move while dragging
+        local conn
+        conn = UserInputService.InputChanged:Connect(function(input)
+            if not dragging then return end
+            if input.UserInputType ~= Enum.UserInputType.MouseMovement
+                and input.UserInputType ~= Enum.UserInputType.Touch then return end
+            local dx = input.Position.X - lastPos.X
+            local dy = input.Position.Y - lastPos.Y
+            local aa = frame.AbsolutePosition + Vector2.new(dx, dy)
+            local W = Overlay.AbsoluteSize
+            local nx = math.clamp((aa.X / W.X) or 0, 0, 1)
+            local ny = math.clamp((aa.Y / W.Y) or 0, 0, 1)
+            frame.Position = UDim2.fromScale(nx, ny)
+            QP.Coords[name] = { X = nx, Y = ny }
+            moved = true
+            lastPos = input.Position
+        end)
+        KH.track(frame.InputBegan and nil or nil)
+        KH.track(conn)
+        frame.InputEnded:Connect(function()
+            if moved then persist(name) end
+        end)
+
+        -- spin the crosshair forever
+        if act.crosshair and iconBits.ring then
+            local ring = iconBits.ring
+            local theta = 0
+            local spin
+            spin = RunService.RenderStepped:Connect(function(dt)
+                theta = (theta or 0) + (dt or 0.016) * 1.6
+                ring.Rotation = (theta * 57.2958) % 360
+            end)
+            KH.track(spin)
+        end
+
+        -- refresh helper exposed for live status updates
+        local entry = { frame = frame, refresh = applyVisual }
+        buttons[name] = entry
+        return entry
+    end
+
+    -- ------------------------------------------------------------- wiring
+    local idx = 0
+    for name, act in pairs(ACTIONS) do
+        if not QP.Hidden[name] then
+            idx = idx + 1
+            local entry = makeButton(name, act, idx)
+            local saved = QP.Coords[name]
+            if saved and saved.X and saved.Y then
+                entry.frame.Position = UDim2.fromScale(saved.X, saved.Y)
+            end
+            entry.refresh()
+        end
+    end
+
+    -- keep every button's on/off look in sync as features change elsewhere
+    local uiSync
+    if UI.quickRefresh then return end
+    KH.spawn(function()
+        while KH.Alive do
+            task.wait(0.4)
+            for name, btn in pairs(buttons) do
+                local ok = pcall(btn.refresh)
+                if not ok then break end
+            end
+        end
+    end)
 end
