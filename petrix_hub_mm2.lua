@@ -8,7 +8,7 @@
 --   ╚═╝  ╚═╝╚═╝   ╚═╝      ╚═╝      ╚═╝       ╚═╝  ╚═╝ ╚═════╝ ╚═════╝
 --
 --   Murder Mystery 2  ·  native Roblox UI, no Drawing API
---   build 3.0.0+ab4d688b  ·  2026-08-31 21:58 UTC
+--   build 3.0.0+3697944d  ·  2026-08-31 21:59 UTC
 --
 --   GENERATED FILE — do not edit directly.
 --   Sources live in src/mm2/ ; rebuild with `python build.py`.
@@ -1321,6 +1321,76 @@ do
     UI.stroke(Window, C.Stroke, 1)
     UI.Window = Window
 
+    -- ------------------------------------------- resize grip (bottom-right)
+    -- Hold the grip to resize the whole hub. While held it pulses.
+    local function resizeGrip()
+        local MIN_W, MIN_H, MAX_W, MAX_H = 420, 300, 1000, 700
+        local grip = make("Frame", {
+            Name = "ResizeGrip",
+            Size = UDim2.fromOffset(20, 20),
+            Position = UDim2.new(1, -22, 1, -22),
+            BackgroundTransparency = 1,
+            ZIndex = 20,
+            Parent = Root,
+        })
+        local glyph = make("TextLabel", {
+            Text = "◣",
+            Font = Enum.Font.GothamBold,
+            TextSize = 13,
+            TextColor3 = C.TextFaint,
+            BackgroundTransparency = 1,
+            Parent = grip,
+        })
+        local pulse = 0
+        local dragging = false
+        local startSize, startMouse
+
+        function grip.Pulse(dt)
+            pulse = (pulse or 0) + dt * 5
+            local s = 0.90 + 0.10 * (0.5 + 0.5 * math.sin(pulse))
+            grip.Size = UDim2.fromOffset(20 * s, 20 * s)
+            grip.Position = UDim2.new(1, -22 * s, 1, -22 * s)
+        end
+
+        grip.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                dragging = true
+                startSize = Root.Size
+                startMouse = input.Position
+                grip.BackgroundTransparency = 0
+                grip.BackgroundColor3 = C.Accent
+                grip.ZIndex = 25
+                if UI.PulseOn then pcall(UI.StartPulse) end
+            end
+        end)
+        grip.InputEnded:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1 then
+                dragging = false
+                grip.BackgroundTransparency = 1
+                if UI.StopPulse then pcall(UI.StopPulse) end
+            end
+        end)
+        grip.InputChanged:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseMovement and dragging then
+                local dx, dy = input.Position.X - startMouse.X, input.Position.Y - startMouse.Y
+                local nw = math.clamp(startSize.X.Offset + dx, MIN_W, MAX_W)
+                local nh = math.clamp(startSize.Y.Offset + dy, MIN_H, MAX_H)
+                WIN_W, WIN_H = nw, nh
+                Root.Size = UDim2.fromOffset(WIN_W, WIN_H)
+            end
+        end)
+
+        local heart = game:GetService("RunService").Heartbeat:Connect(function(dt)
+            if dragging then grip.Pulse(dt or 0.016) end
+        end)
+
+        UI._resizeHandles = UI._resizeHandles or {}
+        table.insert(UI._resizeHandles, heart)
+        return grip
+    end
+
+    UI.resizeGrip = resizeGrip
+
     -- A soft accent wash across the top edge, so the window reads as themed
     -- rather than as a flat grey box.
     local wash = make("Frame", {
@@ -1784,6 +1854,10 @@ do
     UI.shadow(openBtn, 14, 0.55)
     UI.OpenButton = openBtn
     openBtn.MouseButton1Click:Connect(function() UI.setOpen(true) end)
+
+    -- Bottom-right resize grip (hold to resize, pulses while held).
+    UI.StartPulse, UI.StopPulse = function() end, function() end
+    UI.resizeGrip()
     openBtn.MouseEnter:Connect(function() tween(openBtn, 0.12, {Size = UDim2.fromOffset(122, 40)}) end)
     openBtn.MouseLeave:Connect(function() tween(openBtn, 0.12, {Size = UDim2.fromOffset(116, 38)}) end)
 
