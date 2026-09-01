@@ -8,7 +8,7 @@
 --   ╚═╝  ╚═╝╚═╝   ╚═╝      ╚═╝      ╚═╝       ╚═╝  ╚═╝ ╚═════╝ ╚═════╝
 --
 --   Murder Mystery 2  ·  native Roblox UI, no Drawing API
---   build 3.0.0+c07c1387  ·  2026-09-01 14:48 UTC
+--   build 3.0.0+ed99b533  ·  2026-09-01 14:52 UTC
 --
 --   GENERATED FILE — do not edit directly.
 --   Sources live in src/mm2/ ; rebuild with `python build.py`.
@@ -3667,6 +3667,9 @@ do
 
     function Combat.isEngaged()
         if not S.Aim.Enabled then return false end
+        -- Visual aim is always live once enabled: it is a passive assist, so it
+        -- must not wait for the Hold key / toggle like the silent auto-fire.
+        if S.Aim.VisualAim then return true end
         local mode = S.Aim.Mode
         if mode == "Always" then return true end
         if mode == "Toggle" then return toggleArmed end
