@@ -8,7 +8,7 @@
 --   ╚═╝  ╚═╝╚═╝   ╚═╝      ╚═╝      ╚═╝       ╚═╝  ╚═╝ ╚═════╝ ╚═════╝
 --
 --   Murder Mystery 2  ·  native Roblox UI, no Drawing API
---   build 3.1.0+c97a917b  ·  2026-09-01 22:31 UTC
+--   build 3.1.0+f3d4b45c  ·  2026-09-01 22:47 UTC
 --
 --   GENERATED FILE — do not edit directly.
 --   Sources live in src/mm2/ ; rebuild with `python build.py`.
@@ -208,6 +208,7 @@ do
             Fov           = 120,         -- on-screen FOV radius (pixels) for visual aim
             ShowFov       = true,        -- draw the FOV ring on screen
             VisualSpeed   = 10,          -- camera damp rate while chasing a target
+            AutoShoot     = false,       -- auto-fire at the held visual-aim lock
         },
         Knife = {
             AutoThrow     = false,
@@ -3669,32 +3670,98 @@ do
     local toggleArmed = false
     Combat.LastTarget = nil
 
-    -- FantiHub-style "visual aim": rather than sending coordinates silently, it
-    -- swings the camera so the on-screen reticle lands on the target. Follows
-    -- the aim point every frame with an exponential damp (see S.Aim.VisualSpeed)
-    -- so the reticle chases the head instead of snapping around.
+    -- Exunys-style lock: acquire the closest player whose aim point is inside
+    -- the FOV window, then STAY on them, following every frame. Re-picking the
+    -- nearest viable player each tick made the camera flicker between people as
+    -- they crossed; a held lock reads as a real aim. The lock drops only when
+    -- the target leaves the window, dies, or the gun condition stops holding.
+    local lockedPlayer, lockedChar = nil, nil
+    Combat.LockedPlayer = nil
+    local origSensitivity = nil
     local turnSmooth = nil
-    function Combat.turnCamera(dt)
-        if not S.Aim.VisualAim then return false end
-        if S.Aim.OnlyGun and not Game.gunTool() then return false end
 
-        local player, char, part = Combat.pickTarget()
-        if not (player and char and part) then
+    -- Pixel distance from the aim point to the centre of the viewport (our
+    -- reticle). nil when the point is behind/off-screen.
+    local function fovDist(part)
+        local cam = KH.camera()
+        if not cam then return nil end
+        local pos, onScreen = U.toScreen(part.Position)
+        if not onScreen then return nil end
+        local centre = Vector2.new(cam.ViewportSize.X / 2, cam.ViewportSize.Y / 2)
+        return (pos - centre).Magnitude
+    end
+
+    -- While a lock is held the player's own mouse fights the camera every
+    -- frame. Freeze its influence exactly like Exunys does, and hand it back
+    -- the moment the lock drops (or the hub unloads).
+    function Combat.ManageSensitivity(on)
+        local UserInputService = KH.Services.UserInputService
+        if on then
+            if origSensitivity == nil then
+                pcall(function() origSensitivity = UserInputService.MouseDeltaSensitivity end)
+            end
+            pcall(function() UserInputService.MouseDeltaSensitivity = 0 end)
+        elseif origSensitivity ~= nil then
+            pcall(function() UserInputService.MouseDeltaSensitivity = origSensitivity end)
+            origSensitivity = nil
+        end
+    end
+    KH.undo(function() Combat.ManageSensitivity(false) end)
+
+    function Combat.release()
+        if lockedPlayer then
+            lockedPlayer, lockedChar = nil, nil
+            Combat.LastTarget = nil
+            Combat.LockedPlayer = nil
             turnSmooth = nil
+            Combat.ManageSensitivity(false)
+        end
+    end
+
+    -- Choose the target to chase this frame, acquiring the lock when idle and
+    -- dropping stale locks. Returns char, part or nil.
+    local function lockTarget()
+        if lockedPlayer then
+            local char, part = shootableParts(lockedPlayer)
+            if char and part then
+                local d = fovDist(part)
+                if d and d <= S.Aim.Fov then
+                    lockedChar = char
+                    return char, part
+                end
+            end
+            Combat.release()
+        end
+        local player, char, part = Combat.pickTarget()
+        if not (player and char and part) then return nil end
+        local d = fovDist(part)
+        if not (d and d <= S.Aim.Fov) then return nil end
+        lockedPlayer = player
+        lockedChar = char
+        Combat.LastTarget = player
+        Combat.LockedPlayer = player
+        Combat.ManageSensitivity(true)
+        return char, part
+    end
+
+    -- FantiHub-style "visual aim": rather than sending coordinates silently, it
+    -- swings the camera so the reticle lands on the (predicted) target point.
+    -- The FOV ring decides when we unlock — it never blocks a chase, so the
+    -- reticle reaches wherever the target runs.
+    function Combat.turnCamera(dt)
+        if not S.Aim.VisualAim then
+            Combat.release()
             return false
         end
+        if S.Aim.OnlyGun and not Game.gunTool() then return false end
 
-        Combat.LastTarget = player
+        local char, part = lockTarget()
+        if not (char and part) then return false end
 
         local cam = KH.camera()
         if not cam then return false end
 
-        -- The reticle must reach the target whatever side of the screen they
-        -- are on, so this is not gated on the FOV ring. The ring (drawn by the
-        -- aim marker) stays as a purely visual lock window — gating on it made
-        -- the camera idle while the "identified" target ran around outside it.
         local goal = CFrame.lookAt(cam.CFrame.Position, Comb.aimPoint(char, part))
-
         local damp = 1 - math.exp(-(dt or 0.016) * (S.Aim.VisualSpeed or 10))
         if not turnSmooth then
             turnSmooth = goal
@@ -3703,6 +3770,21 @@ do
         end
         cam.CFrame = turnSmooth
         return true
+    end
+
+    -- Auto-shoot at the held lock (Exunys triggerbot idea, adapted to MM2's
+    -- shot remote). Throttled by the same Fire Rate as the silent aim.
+    local lastLockedShot = 0
+    function Combat.fireLocked()
+        if not lockedPlayer then return false end
+        if not Game.gunTool() then return false end
+        local char, part = shootableParts(lockedPlayer)
+        if not (char and part) then return false end
+        local now = os.clock()
+        if now - lastLockedShot < S.Aim.FireRate then return false end
+        lastLockedShot = now
+        local ok, err = Game.shoot(Combat.aimPoint(char, part))
+        return ok, err
     end
 
     function Combat.isEngaged()
@@ -3745,12 +3827,16 @@ do
     end
 
     KH.onFrame("aimbot", function(dt)
-        if not Combat.isEngaged() then return end
+        if not Combat.isEngaged() then
+            Combat.release()
+            return
+        end
         -- Visual aim is a pure assist: swing the camera to keep the reticle on
         -- target and let the player shoot by hand. It disables the silent
         -- auto-fire, which is what makes the FantiHub behaviour visibly distinct.
         if S.Aim.VisualAim then
             Combat.turnCamera(dt)
+            if S.Aim.AutoShoot then Combat.fireLocked() end
             return
         end
         Combat.fireOnce(false)
@@ -4952,7 +5038,7 @@ do
         }))
 
         local visual = UI.section(tab, "Visual Aim (FantiHub)")
-        UI.label(visual, "FantiHub-style aim assist: instead of silent aim, it swings your camera so the reticle locks onto the target — it chases the head wherever they run. You shoot by hand. Disables the silent auto-fire while on.")
+        UI.label(visual, "Locks onto the closest player whose aim point enters the FOV window and then chases their head until they leave it — your own mouse stays frozen while the lock holds. You can let it shoot for you with Auto Shoot. Disables the silent auto-fire while on.")
         UI.toggle(visual, opt("Aim", "VisualAim", {
             text = "Visual Aim",
             desc = "Swing the camera toward the locked target.",
@@ -4963,11 +5049,15 @@ do
         }))
         UI.slider(visual, opt("Aim", "Fov", {
             text = "Lock FOV", min = 30, max = 400, step = 5, suffix = "px",
-            desc = "Radius of the on-screen lock window.",
+            desc = "Screen radius (from the crosshair) where it acquires and keeps a target.",
         }))
         UI.slider(visual, opt("Aim", "VisualSpeed", {
             text = "Visual Speed", min = 3, max = 30, step = 1,
             desc = "How fast the camera chases the target. Low = smooth pull, high = instant snap.",
+        }))
+        UI.toggle(visual, opt("Aim", "AutoShoot", {
+            text = "Auto Shoot on Lock",
+            desc = "Automatically fire at the locked target.",
         }))
         UI.toggle(visual, opt("Aim", "ShowFov", {
             text = "Show FOV Ring",
@@ -6396,9 +6486,11 @@ do
     parts[#parts + 1] = sB
     local spinT = 0
 
-    -- FantiHub-style FOV ring: a circle centred on the viewport showing how
-    -- wide the visual-aim lock window is. Shown only when Visual Aim + ShowFov
-    -- are enabled. Drawn as a perfectly round frame with a strong accent border.
+    -- FantiHub-style FOV ring: a circle around the cursor showing how wide the
+    -- visual-aim lock window is — targets crossing inside are locked. It hugs
+    -- the mouse (Exunys-style), not a fixed crosshair centre. Shown only when
+    -- Visual Aim + ShowFov are enabled. Drawn as a perfectly round frame with a
+    -- strong accent border; flips to the "locked" colour once a lock is held.
     local fovRing = make("Frame", {
         AnchorPoint = Vector2.new(0.5, 0.5),
         Position = UDim2.fromScale(0.5, 0.5),
@@ -6411,6 +6503,14 @@ do
     })
     UI.corner(fovRing, 600)
     UI.stroke(fovRing, C.Accent, 1, 0.15)
+
+    local UserInputService = KH.Services.UserInputService
+    local function mouseCentre()
+        local cam = KH.camera()
+        if not cam then return Vector2.zero end
+        local ok, p = pcall(function() return UserInputService:GetMouseLocation() end)
+        return ok and p or Vector2.zero
+    end
 
     -- resolve the current locked target's on-screen point (or nil)
     local function lockedPoint()
@@ -6456,12 +6556,18 @@ do
         for _, p in ipairs(parts) do p.Visible = vis end
         spin.Visible = vis
 
-        -- FOV ring responds to the configured radius, whether or not we are
-        -- currently locked (it shows the size of the lock window).
+        -- FOV ring hugs the cursor with the configured radius, and flips colour
+        -- from accent to red while a visual-aim lock is held (Exunys-style).
         local showFov = S.Aim.VisualAim and S.Aim.ShowFov or false
+        local locked = Comb and Comb.LockedPlayer ~= nil
         if showFov then
             local d = math.max(S.Aim.Fov or 120, 8) * 2
             fovRing.Size = UDim2.fromOffset(d, d)
+            local m = mouseCentre()
+            fovRing.Position = UDim2.fromOffset(m.X - d / 2, m.Y - d / 2)
+            fovRing.BackgroundColor3 = locked and C.Bad or C.Accent
+            local stroke = fovRing:FindFirstChildOfClass("UIStroke")
+            if stroke then stroke.Color = locked and C.Bad or C.Accent end
         end
         fovRing.Visible = showFov
 
