@@ -8,7 +8,7 @@
 --   ╚═╝  ╚═╝╚═╝   ╚═╝      ╚═╝      ╚═╝       ╚═╝  ╚═╝ ╚═════╝ ╚═════╝
 --
 --   Murder Mystery 2  ·  native Roblox UI, no Drawing API
---   build 3.0.0+413e6e3d  ·  2026-09-01 13:52 UTC
+--   build 3.0.0+0053ee44  ·  2026-09-01 13:57 UTC
 --
 --   GENERATED FILE — do not edit directly.
 --   Sources live in src/mm2/ ; rebuild with `python build.py`.
@@ -6067,7 +6067,7 @@ do
         -- render loop moves the frame per-frame while a drag is live
         local going
         going = RunService.RenderStepped:Connect(function()
-            if mode.active and mode.moved then
+            if mode.active and mode.moved and mode.target then
                 mode.apply(mode.target)
             end
         end)
@@ -6085,8 +6085,9 @@ do
         if input.UserInputType ~= Enum.UserInputType.MouseButton1
             and input.UserInputType ~= Enum.UserInputType.Touch then return end
         local pos = input.Position
+        local pos2 = Vector2.new(pos.X, pos.Y)
         for name, m in pairs(buttons) do
-            if m.hit(pos) then
+            if m.hit(pos2) then
                 if not editMode() then
                     -- normal mode: a tap toggles the action, no drag, no trap
                     m.tap()
@@ -6095,10 +6096,11 @@ do
                 current = m
                 m.active = true
                 m.moved = false
-                m.startPos = pos
-                m.last = pos
-                m.offset = m.frame.AbsolutePosition - pos
-                m.target = pos + m.offset
+                m.startPos = pos2
+                m.last = pos2
+                local ap = m.frame.AbsolutePosition
+                m.offset = Vector2.new(ap.X, ap.Y) - pos2
+                m.target = pos2 + m.offset
                 UI.tween(m.frame, 0.1, {Size = UDim2.fromOffset(BTN + 4, BTN + 4)})
                 break
             end
@@ -6111,11 +6113,12 @@ do
         local t = input.UserInputType
         if t ~= Enum.UserInputType.MouseMovement and t ~= Enum.UserInputType.Touch then return end
         local pos = input.Position
-        current.last = pos
-        if not current.moved and (pos - current.startPos).Magnitude > MOVE_TH then
+        local pos2 = Vector2.new(pos.X, pos.Y)
+        current.last = pos2
+        if not current.moved and (pos2 - current.startPos).Magnitude > MOVE_TH then
             current.moved = true
         end
-        current.target = pos + current.offset
+        current.target = pos2 + current.offset
     end)
 
     UserInputService.InputEnded:Connect(function(input, processed)
