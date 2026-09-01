@@ -8,7 +8,7 @@
 --   ╚═╝  ╚═╝╚═╝   ╚═╝      ╚═╝      ╚═╝       ╚═╝  ╚═╝ ╚═════╝ ╚═════╝
 --
 --   Murder Mystery 2  ·  native Roblox UI, no Drawing API
---   build 3.0.0+ed99b533  ·  2026-09-01 14:52 UTC
+--   build 3.1.0+23cfced4  ·  2026-09-01 22:18 UTC
 --
 --   GENERATED FILE — do not edit directly.
 --   Sources live in src/mm2/ ; rebuild with `python build.py`.
@@ -50,7 +50,7 @@ end
 -- active locals. Module bodies are wrapped in `do ... end` so their locals are
 -- released at the end of the block.
 local KH = {
-    Version = "3.0.0",
+    Version = "3.1.0",
     Conn    = {}, -- RBXScriptConnections   -> disconnected on unload
     Inst    = {}, -- Instances we created   -> destroyed on unload
     Thread  = {}, -- task threads           -> cancelled on unload
@@ -298,6 +298,7 @@ do
             QuickEdit     = false,
             AutoSave      = true,
             Profile       = "default",
+            Language      = "English",
         },
         Quick = {
             Coords = {},   -- name -> {X = 0..1, Y = 0..1} for floating hotkeys
@@ -1526,6 +1527,7 @@ do
             ZIndex = 4,
             Parent = card,
         })
+        UI.trackText(credit, "Text", "Inspirado no Kitty Hub (capyb2222/mm2-script)\nadaptado e rebranded para Petrix Hub.")
 
         -- disclaimer
         local warn = make("TextLabel", {
@@ -1541,6 +1543,7 @@ do
             ZIndex = 4,
             Parent = card,
         })
+        UI.trackText(warn, "Text", "Use por sua conta e risco.\nScript de terceiros para fins educacionais — pode violar os termos do Roblox.")
 
         -- OK button
         local okBtn = make("TextButton", {
@@ -1826,6 +1829,7 @@ do
         TextXAlignment = Enum.TextXAlignment.Left,
         Parent = searchWrap,
     })
+    UI.trackText(searchBox, "PlaceholderText", "Search settings…")
 
     local Pages = make("Frame", {
         Size = UDim2.new(1, 0, 1, -44),
@@ -1897,6 +1901,7 @@ do
             TextXAlignment = Enum.TextXAlignment.Left,
             Parent = button,
         })
+        UI.trackText(textLabel, "Text", name)
 
         local page = make("ScrollingFrame", {
             Name = name,
@@ -1945,7 +1950,7 @@ do
         UI.corner(card, 10)
         UI.stroke(card, C.Stroke, 1, 0.35)
 
-        make("TextLabel", {
+        local titleLabel = make("TextLabel", {
             Text = titleText:upper(),
             Font = Enum.Font.GothamBold,
             TextSize = 11,
@@ -1956,6 +1961,7 @@ do
             TextXAlignment = Enum.TextXAlignment.Left,
             Parent = card,
         })
+        UI.trackText(titleLabel, "Text", titleText, true)
 
         local body = make("Frame", {
             BackgroundTransparency = 1,
@@ -1977,6 +1983,21 @@ do
     function UI.nextOrder(section)
         section.order = (section.order or 0) + 1
         return section.order
+    end
+
+    -- ------------------------------------------------------------- i18n
+    -- Every static UI string can be registered here so a language switch can
+    -- re-write it later. Dynamic labels (values, readouts, HUD, keybind
+    -- buttons) are skipped on purpose: they hold runtime data, not UI text.
+    UI.i18n = {}
+    function UI.trackText(obj, prop, original, upper)
+        if not obj or type(original) ~= "string" or original == "" then return end
+        table.insert(UI.i18n, {
+            obj = obj,
+            prop = prop or "Text",
+            original = original,
+            upper = upper or false,
+        })
     end
 
     -- ------------------------------------------------------------- search
@@ -2247,7 +2268,7 @@ do
     })
     UI.corner(keybindPanel, 8)
     UI.stroke(keybindPanel, C.Stroke, 1, 0.3)
-    make("TextLabel", {
+    local keybindHead = make("TextLabel", {
         Text = "KEYBINDS",
         Font = Enum.Font.GothamBold,
         TextSize = 10,
@@ -2258,6 +2279,7 @@ do
         TextXAlignment = Enum.TextXAlignment.Left,
         Parent = keybindPanel,
     })
+    UI.trackText(keybindHead, "Text", "KEYBINDS")
     local keybindList = make("Frame", {
         BackgroundTransparency = 1,
         Position = UDim2.fromOffset(0, 24),
@@ -2370,9 +2392,10 @@ do
             TextXAlignment = Enum.TextXAlignment.Left,
             Parent = row,
         })
+        UI.trackText(label, "Text", opts.text or "")
 
         if hasDesc then
-            make("TextLabel", {
+            local descLabel = make("TextLabel", {
                 Text = opts.desc,
                 Font = Enum.Font.Gotham,
                 TextSize = 11,
@@ -2384,6 +2407,7 @@ do
                 TextTruncate = Enum.TextTruncate.AtEnd,
                 Parent = row,
             })
+            UI.trackText(descLabel, "Text", opts.desc)
         end
 
         UI.registerSearch(section, row, (opts.text or "") .. " " .. (opts.desc or ""))
@@ -2790,9 +2814,10 @@ do
         UI.corner(button, 7)
         if opts.kind == "primary" then UI.accented(button, "BackgroundColor3") end
         UI.stroke(button, opts.kind == "danger" and C.Bad or C.Stroke, 1, 0.45)
+        UI.trackText(button, "Text", opts.text or "Button")
 
         if opts.desc then
-            make("TextLabel", {
+            local buttonDesc = make("TextLabel", {
                 Text = opts.desc,
                 Font = Enum.Font.Gotham,
                 TextSize = 11,
@@ -2803,6 +2828,7 @@ do
                 TextXAlignment = Enum.TextXAlignment.Left,
                 Parent = row,
             })
+            UI.trackText(buttonDesc, "Text", opts.desc)
         end
 
         local baseTransparency = button.BackgroundTransparency
@@ -2846,6 +2872,7 @@ do
         UI.corner(box, 6)
         UI.stroke(box, C.Stroke, 1, 0.3)
         UI.pad(box, 0, 0, 0, 8, 8)
+        UI.trackText(box, "PlaceholderText", opts.placeholder or "")
 
         -- Hotkeys must not fire while the user is typing into the field.
         box.Focused:Connect(function() UI.Capturing = true end)
@@ -3040,6 +3067,7 @@ do
             Parent = section.body,
         })
         UI.registerSearch(section, label, text)
+        UI.trackText(label, "Text", text)
         return label
     end
 
@@ -5464,6 +5492,26 @@ do
             onSet = function(v) UI.KeybindPanel.Visible = v end,
         }))
         UI.toggle(interface, opt("UI", "Notifications", {text = "Notifications"}))
+        UI.input(interface, {
+            text = "Language",
+            placeholder = "português, español, 日本語…",
+            desc = "Type a language and the whole UI is retranslated via an online API.",
+            get = function() return S.UI.Language end,
+            set = function(v)
+                S.UI.Language = v
+                Config.touch()
+                local Lang = KH.Lang
+                if not Lang then return end
+                local code = Lang.nameToCode(v)
+                if code == "en" then
+                    Lang.reset()
+                elseif code then
+                    Lang.apply(code)
+                else
+                    UI.notify({title = "Language", text = "Unknown language. Try \"pt\", \"es\", \"ja\"…", kind = "warn"})
+                end
+            end,
+        })
 
         local configs = UI.section(tab, "Configuration")
         if not Config.available then
@@ -6405,5 +6453,264 @@ do
             spinT = spinT + (dt or 0.016) * 3
             spin.Rotation = (spinT * 57.2958) % 360
         end
+    end)
+end
+
+-- ─── src/mm2/17_language.lua ───────────────────────────────────────────
+
+-- ============================================================================
+--  LANGUAGE — translate the whole interface through a free translation API
+-- ============================================================================
+-- The UI comes in (mostly) English. This module lets the user type a language
+-- — "português", "español", "日本語", a bare ISO code like "pt" — and the whole
+-- menu is retranslated live. It uses the keyless Google translate endpoint and
+-- caches every result on disk (PetrixHub/lang/<code>.json) so re-opening the
+-- hub after the first translation is instant and offline.
+--
+-- Only text that was registered with UI.trackText() is rewritten. Dynamic
+-- values (readouts, dropdown current values, keybind buttons, notifications)
+-- are never touched because they hold runtime state, not UI copy.
+-- ============================================================================
+
+do
+    local HttpService = KH.Services.HttpService
+    local UI          = KH.UI
+    local S           = KH.S
+    local Config      = KH.Config
+
+    local API = "https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=%s&dt=t&q=%s"
+
+    -- Common name -> ISO code. Anything unrecognised is tried as a bare code.
+    local NAMES = {
+        en = "en", english = "en",
+        pt = "pt", portugues = "pt", ["português"] = "pt", portuguese = "pt",
+        es = "es", espanol = "es", ["español"] = "es", spanish = "es",
+        fr = "fr", francais = "fr", ["français"] = "fr", french = "fr",
+        de = "de", deutsch = "de", german = "de",
+        it = "it", italiano = "it", italian = "it",
+        ja = "ja", japanese = "ja", japones = "ja", ["japonês"] = "ja",
+        ko = "ko", korean = "ko", coreano = "ko",
+        ["zh-cn"] = "zh-CN", zh = "zh-CN", chinese = "zh-CN", chines = "zh-CN", ["中文"] = "zh-CN",
+        ar = "ar", arabic = "ar", arabe = "ar", ["árabe"] = "ar",
+        ru = "ru", russian = "ru", russo = "ru",
+        hi = "hi", hindi = "hi",
+        tr = "tr", turkish = "tr", turco = "tr",
+        vi = "vi", vietnamese = "vi", vietnamita = "vi",
+        th = "th", thai = "th", tailandes = "th", ["tailandês"] = "th",
+        nl = "nl", dutch = "nl", holandes = "nl", ["holandês"] = "nl",
+        pl = "pl", polish = "pl", polones = "pl", ["polonês"] = "pl",
+        sv = "sv", swedish = "sv", sueco = "sv",
+        he = "he", hebrew = "he", hebraico = "he",
+        id = "id", indonesian = "id", indonesio = "id", ["indonésio"] = "id",
+        el = "el", greek = "el", grego = "el",
+        uk = "uk", ukrainian = "uk", ucraniano = "uk",
+        cs = "cs", czech = "cs", tcheco = "cs",
+    }
+
+    local Lang = { cache = {}, busy = false, code = "en" }
+    KH.Lang = Lang
+
+    local function codeOf(name)
+        if type(name) ~= "string" then return nil end
+        local key = string.lower(name):gsub("^%s+", ""):gsub("%s+$", "")
+        if key == "" then return "en" end
+        if NAMES[key] then return NAMES[key] end
+        local code = key:match("^([a-z][a-z])%s*$")
+        if code then return code end
+        return nil
+    end
+
+    function Lang.nameToCode(name)
+        return codeOf(name)
+    end
+
+    -- ------------------------------------------------------------ disk cache
+    local function cachePath(code)
+        return ("PetrixHub/lang/%s.json"):format(code)
+    end
+
+    local diskOK = X.writefile and X.makefolder
+    if diskOK then
+        pcall(function()
+            if not isfolder("PetrixHub/lang") then makefolder("PetrixHub/lang") end
+        end)
+    end
+
+    function Lang.loadCache(code)
+        if not (diskOK and isfile(cachePath(code))) then return {} end
+        local ok, data = pcall(function() return HttpService:JSONDecode(readfile(cachePath(code))) end)
+        return (ok and typeof(data) == "table") and data or {}
+    end
+
+    function Lang.saveCache(code)
+        if not diskOK then return end
+        local map = Lang.cache[code] or {}
+        local clean = {}
+        for k, v in pairs(map) do
+            if type(k) == "string" and type(v) == "string" then clean[k] = v end
+        end
+        pcall(function() writefile(cachePath(code), HttpService:JSONEncode(clean)) end)
+    end
+
+    -- --------------------------------------------------------------- fetch
+    local function GET(url)
+        local ok, body = pcall(function() return game:HttpGet(url) end)
+        if not ok or type(body) ~= "string" then return nil end
+        return body
+    end
+
+    local function translateString(code, s)
+        local url = API:format(code, HttpService:UrlEncode(s))
+        local body = GET(url)
+        if not body then return nil end
+        local ok, data = pcall(function() return HttpService:JSONDecode(body) end)
+        if not ok or type(data) ~= "table" or type(data[1]) ~= "table" then return nil end
+        local out = {}
+        for _, seg in ipairs(data[1]) do
+            if type(seg) == "table" and seg[1] then out[#out + 1] = tostring(seg[1]) end
+        end
+        return table.concat(out)
+    end
+
+    -- Translate untranslated strings into `code`, batching several lines in a
+    -- single request (Google keeps the newlines) with a per-item fallback so a
+    -- flaky network never loses the whole run.
+    local function fetch(code, strings)
+        local map = Lang.cache[code]
+        if not map then map = Lang.loadCache(code); Lang.cache[code] = map end
+
+        local todo = {}
+        for _, s in ipairs(strings) do
+            if not map[s] then todo[#todo + 1] = s end
+        end
+        if #todo == 0 then return true end
+
+        -- Multi-line strings would shift the newline-split alignment of a batch
+        -- request, so they go one at a time (there are very few of them).
+        local singles, batch = {}, {}
+        for _, s in ipairs(todo) do
+            if s:find("\n") then singles[#singles + 1] = s else batch[#batch + 1] = s end
+        end
+
+        local function translateEach(list)
+            for _, s in ipairs(list) do
+                local tr = translateString(code, s)
+                if tr and tr ~= "" then map[s] = tr end
+                task.wait(0.1)
+            end
+        end
+
+        translateEach(singles)
+
+        for i = 1, #batch, 32 do
+            local chunk = {}
+            for j = i, math.min(i + 31, #batch) do chunk[#chunk + 1] = batch[j] end
+
+            local got = translateString(code, table.concat(chunk, "\n"))
+            if got then
+                local lines = got:split("\n")
+                if #lines >= #chunk then
+                    for k = 1, #chunk do
+                        local tr = (lines[k] or ""):gsub("^%s+", ""):gsub("%s+$", "")
+                        if tr ~= "" then map[chunk[k]] = tr end
+                    end
+                else
+                    for _, s in ipairs(chunk) do
+                        local tr = translateString(code, s)
+                        if tr and tr ~= "" then map[s] = tr end
+                    end
+                end
+            else
+                for _, s in ipairs(chunk) do
+                    local tr = translateString(code, s)
+                    if tr and tr ~= "" then map[s] = tr end
+                end
+            end
+            task.wait(0.1)
+        end
+
+        local complete = true
+        for _, s in ipairs(todo) do
+            if not map[s] then complete = false end
+        end
+        return complete
+    end
+
+    -- -------------------------------------------------------------- apply
+    local function applySync(code)
+        local i18n = UI.i18n or {}
+        for i = #i18n, 1, -1 do
+            local e = i18n[i]
+            if not e.obj or not e.obj.Parent then table.remove(i18n, i) end
+        end
+
+        if code == "en" then
+            for _, e in ipairs(i18n) do
+                local original = e.original or ""
+                pcall(function() e.obj[e.prop] = e.upper and original:upper() or original end)
+            end
+            Lang.code = "en"
+            return true
+        end
+
+        local unique, seen = {}, {}
+        for _, e in ipairs(i18n) do
+            local s = e.original
+            if s and s ~= "" and not seen[s] then
+                seen[s] = true
+                unique[#unique + 1] = s
+            end
+        end
+
+        local ok = fetch(code, unique)
+
+        for _, e in ipairs(i18n) do
+            local t = Lang.cache[code][e.original or ""]
+            if t and t ~= "" then
+                pcall(function() e.obj[e.prop] = e.upper and t:upper() or t end)
+            end
+        end
+
+        Lang.code = code
+        Lang.saveCache(code)
+        return ok
+    end
+
+    function Lang.apply(name)
+        local code = codeOf(name) or "en"
+        if Lang.busy then
+            UI.notify({title = "Language", text = "Still translating…", kind = "warn"})
+            return false
+        end
+        Lang.busy = true
+        UI.notify({title = "Language", text = ("Translating UI to %s…"):format(code), duration = 2})
+        KH.detach(function()
+            local ok = pcall(applySync, code)
+            Lang.busy = false
+            if ok then
+                UI.notify({title = "Language", text = ("UI translated to %s."):format(code), kind = "good", duration = 3})
+            else
+                UI.notify({title = "Language", text = "Translation service unreachable — keeping current text.", kind = "warn", duration = 4})
+            end
+        end)
+        return true
+    end
+
+    function Lang.reset()
+        Lang.busy = false
+        pcall(applySync, "en")
+    end
+
+    -- Auto re-apply a saved language once the whole menu (all tabs) exists.
+    task.delay(1.5, function()
+        if not KH.Alive then return end
+        local saved = S.UI.Language or "English"
+        local code = codeOf(saved)
+        if not code or code == "en" then return end
+        if not Lang.cache[code] then Lang.cache[code] = Lang.loadCache(code) end
+        KH.detach(function()
+            pcall(applySync, code)
+            Lang.busy = false
+        end)
     end)
 end
