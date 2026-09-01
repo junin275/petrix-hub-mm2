@@ -8,7 +8,7 @@
 --   ╚═╝  ╚═╝╚═╝   ╚═╝      ╚═╝      ╚═╝       ╚═╝  ╚═╝ ╚═════╝ ╚═════╝
 --
 --   Murder Mystery 2  ·  native Roblox UI, no Drawing API
---   build 3.0.0+60a85fa2  ·  2026-09-01 13:24 UTC
+--   build 3.0.0+a31ba6b7  ·  2026-09-01 13:31 UTC
 --
 --   GENERATED FILE — do not edit directly.
 --   Sources live in src/mm2/ ; rebuild with `python build.py`.
@@ -5766,9 +5766,13 @@ end
 -- ============================================================================
 --  QUICK ACCESS — floating draggable hot-buttons pinned to the screen
 -- ============================================================================
--- Floating action buttons live on the Overlay (above the menu). Each one maps
--- to a fast action; pressing it toggles the feature and it gets pinned to
--- wherever you drag it. The Aimbot button draws a spinning crosshair.
+-- Floating action buttons live in their own ScreenGui (above everything).
+-- Each maps to a fast action: tap toggles it, drag repositions it, and it is
+-- pinned to wherever you drop it. The Aimbot button draws a spinning crosshair.
+--
+-- Input is handled globally via UserInputService with manual hit-testing, the
+-- most reliable route on mobile executors, plus a move threshold so a tap
+-- (toggle) and a drag (move) never get confused.
 -- ============================================================================
 
 do
@@ -5776,10 +5780,9 @@ do
     local Move      = KH.Move
     local Config    = KH.Config
     local make      = UI.make
-    local UserInputService = KH.Services.UserInputService
-    local RunService       = KH.Services.RunService
-
-    local Overlay = UI.Overlay
+    local Services  = KH.Services
+    local UserInputService = Services.UserInputService
+    local RunService       = Services.RunService
 
     -- Persisted quick-bar surface: which buttons are shown, where they sit.
     S.Quick = S.Quick or { Coords = {}, Hidden = {} }
@@ -5787,11 +5790,24 @@ do
     QP.Coords = QP.Coords or {}
     QP.Hidden = QP.Hidden or {}
 
-    -- ------------------------------------------------------------ actions
+    -- dedicated layer, above the menu (menu is 10000, overlay 10001)
+    local gparent = (type(gethui) == "function" and gethui())
+        or game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
+    local barGui = make("ScreenGui", {
+        Name = "kh_quick_" .. tostring(math.random(100000, 999999)),
+        ResetOnSpawn = false,
+        IgnoreGuiInset = true,
+        ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+        DisplayOrder = 10005,
+        Parent = gparent,
+    })
+    KH.own(barGui)
+
     local function refreshAllUI()
         if UI.refreshAll then pcall(UI.refreshAll) end
     end
 
+    -- ------------------------------------------------------------ actions
     local ACTIONS = {
         Aimbot = {
             label = "Aimbot",
@@ -5836,13 +5852,13 @@ do
     }
 
     -- ------------------------------------------------------ button factory
-    local BTN = 58
-    local buttons = {}      -- name -> {frame, glowBits, refresh}
-    local spinning = {}     -- crosshair rotation jobs
+    local BTN  = 58
+    local CPT  = 34 -- clickable/hit area
+    local buttons = {}
 
-    local function persist(name)
-        if not Config.available then return end
-        local ok = pcall(function() Config.save(S.UI.Profile) end)
+    local function persist()
+        if not (Config.available and Config.save) then return end
+        pcall(function() Config.save(S.UI.Profile) end)
     end
 
     local function makeButton(name, act, index)
@@ -5850,36 +5866,43 @@ do
             Name = "Quick_" .. name,
             Size = UDim2.fromOffset(BTN, BTN),
             Position = UDim2.fromScale(0.015, 0.16 + index * 0.115),
-            BackgroundColor3 = C.Panel,
-            BackgroundTransparency = 0.25,
+            BackgroundTransparency = 1,
             BorderSizePixel = 0,
-            ZIndex = 90,
-            Parent = Overlay,
+            Parent = barGui,
         })
         KH.own(frame)
-        UI.corner(frame, 11)
-        UI.stroke(frame, C.Stroke, 1, 0)
 
-        -- accent glow behind the whole button (animated when active)
+        -- the visible pill (child of the invisible hit-frame so we can center it)
+        local body = make("Frame", {
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            Position = UDim2.fromScale(0.5, 0.5),
+            Size = UDim2.fromOffset(BTN, BTN),
+            BackgroundColor3 = C.Panel,
+            BackgroundTransparency = 0.3,
+            BorderSizePixel = 0,
+            Parent = frame,
+        })
+        UI.corner(body, 12)
+        UI.stroke(body, C.Stroke, 1, 0)
+
+        -- accent glow (animated when active)
         local glow = make("Frame", {
             Size = UDim2.fromScale(1, 1),
             BackgroundColor3 = C.Accent,
             BackgroundTransparency = 1,
             BorderSizePixel = 0,
-            ZIndex = 89,
-            Parent = frame,
+            Parent = body,
         })
-        UI.corner(glow, 11)
+        UI.corner(glow, 12)
         UI.accented(glow, "BackgroundColor3")
 
         local iconSpot = make("Frame", {
             Size = UDim2.new(1, 0, 0, 40),
-            Position = UDim2.fromScale(0, 0),
             BackgroundTransparency = 1,
-            Parent = frame,
+            Position = UDim2.fromScale(0, 0),
+            Parent = body,
         })
 
-        -- icon: spinning crosshair for Aimbot, text glyph otherwise
         local iconBits = {}
         if act.crosshair then
             local ring = make("Frame", {
@@ -5911,10 +5934,8 @@ do
                 Parent = ring,
             })
             UI.corner(dot, 3)
-            iconBits.ring = ring
-            iconBits.horiz = horiz
-            iconBits.vert = vert
-            iconBits.dot = dot
+            iconBits.ring, iconBits.horiz, iconBits.vert, iconBits.dot =
+                ring, horiz, vert, dot
         else
             local gl = make("TextLabel", {
                 Text = act.glyph or act.label,
@@ -5936,21 +5957,20 @@ do
             BackgroundTransparency = 1,
             Position = UDim2.fromOffset(0, 38),
             Size = UDim2.new(1, 0, 0, 16),
-            Parent = frame,
+            Parent = body,
         })
 
-        -- ---- drag (pin on release) + tap to toggle
-        local dragging = false
-        local moved = false
-
+        -- ------------------------------------------------------ state/visual
+        local lastOn = nil
         local function applyVisual()
             local on = act.get and act.get() or false
-            local target = on and {BackgroundTransparency = 0.25} or {BackgroundTransparency = 0.55}
-            UI.tween(frame, 0.12, {
-                BackgroundTransparency = on and 0.25 or 0.55,
+            if on == lastOn then return end
+            lastOn = on
+            UI.tween(body, 0.12, {
                 BackgroundColor3 = on and C.Card or C.Panel,
+                BackgroundTransparency = on and 0.25 or 0.3,
             })
-            UI.tween(glow, 0.12, {BackgroundTransparency = on and 0.9 or 1})
+            UI.tween(glow, 0.12, {BackgroundTransparency = on and 0.92 or 1})
             UI.tween(label, 0.12, {TextColor3 = on and C.Accent or C.TextDim})
             if iconBits.ring then
                 UI.tween(iconBits.horiz, 0.12, {BackgroundColor3 = on and C.Accent or C.Text})
@@ -5960,94 +5980,147 @@ do
                 UI.tween(iconBits.gl, 0.12, {TextColor3 = on and C.Accent or C.TextDim})
             end
         end
-
-        -- Drag keeps the button pinned to the grab point (offset), so it never
-        -- jumps — works identically for mouse and touch.
-        local activeInput = nil
-        local grabOffset = Vector2.new()
-
-        frame.InputBegan:Connect(function(input)
-            if input.UserInputType ~= Enum.UserInputType.MouseButton1
-                and input.UserInputType ~= Enum.UserInputType.Touch then return end
-            dragging = true
-            moved = false
-            activeInput = input
-            grabOffset = frame.AbsolutePosition - input.Position
-        end)
-        frame.InputEnded:Connect(function(input)
-            if input.UserInputType ~= Enum.UserInputType.MouseButton1
-                and input.UserInputType ~= Enum.UserInputType.Touch then return end
-            if activeInput and input == activeInput then
-                if not moved then
-                    -- tap: toggle the action
-                    local cur = act.get and act.get() or false
-                    act.set(not cur)
-                    applyVisual()
-                else
-                    persist(name)
-                end
-                activeInput = nil
-            end
-            dragging = false
-        end)
-
-        local conn
-        conn = UserInputService.InputChanged:Connect(function(input)
-            if not dragging then return end
-            if input.UserInputType ~= Enum.UserInputType.MouseMovement
-                and input.UserInputType ~= Enum.UserInputType.Touch then return end
-            local target = input.Position + grabOffset
-            local oa = Overlay.AbsolutePosition
-            local W = Overlay.AbsoluteSize
-            local nx = math.clamp(((target.X - oa.X) / W.X) or 0, 0, 1)
-            local ny = math.clamp(((target.Y - oa.Y) / W.Y) or 0, 0, 1)
-            frame.Position = UDim2.fromScale(nx, ny)
-            QP.Coords[name] = { X = nx, Y = ny }
-            moved = true
-        end)
-        KH.track(conn)
+        applyVisual()
 
         -- spin the crosshair forever
         if act.crosshair and iconBits.ring then
             local ring = iconBits.ring
             local theta = 0
-            local spin
-            spin = RunService.RenderStepped:Connect(function(dt)
+            local spin = RunService.RenderStepped:Connect(function(dt)
                 theta = (theta or 0) + (dt or 0.016) * 1.6
                 ring.Rotation = (theta * 57.2958) % 360
             end)
             KH.track(spin)
         end
 
-        -- refresh helper exposed for live status updates
-        local entry = { frame = frame, refresh = applyVisual }
-        buttons[name] = entry
-        return entry
+        -- --------------------------------------------- shared drag descriptor
+        local mode = {
+            name = name,
+            act = act,
+            frame = frame,
+            active = false,
+            startPos = Vector2.new(),
+            last = Vector2.new(),
+            offset = Vector2.new(),
+            moved = false,
+        }
+
+        -- hit-test: did this press start inside the button's screen box?
+        function mode.hit(pos)
+            local ax, ay = frame.AbsolutePosition.X, frame.AbsolutePosition.Y
+            local sz = frame.AbsoluteSize
+            local center = (BTN - CPT) / 2
+            return pos.X >= ax + center and pos.X <= ax + sz.X - center
+                and pos.Y >= ay + center and pos.Y <= ay + sz.Y - center
+        end
+
+        -- apply a screen-space target, clamped into the viewport
+        function mode.apply(target)
+            local sz = barGui.AbsoluteSize
+            local nx = math.clamp(target.X / math.max(sz.X, 1), 0, 1)
+            local ny = math.clamp(target.Y / math.max(sz.Y, 1), 0, 1)
+            frame.Position = UDim2.fromScale(nx, ny)
+            QP.Coords[name] = { X = nx, Y = ny }
+        end
+
+        function mode.tap()
+            local cur = act.get and act.get() or false
+            act.set(not cur)
+            applyVisual()
+        end
+
+        -- exposed so the sync loop can refresh the on/off look cheaply
+        function mode.refresh() applyVisual() end
+
+        buttons[name] = mode
+
+        -- render loop moves the frame per-frame while a drag is live
+        local going
+        going = RunService.RenderStepped:Connect(function()
+            if mode.active and mode.moved then
+                mode.apply(mode.target)
+            end
+        end)
+        KH.track(going)
+
+        return mode
     end
+
+    -- ------------------------------------------------------------- global input
+    local MOVE_TH = 12 -- px before a press counts as a drag, not a tap
+    local current = nil
+
+    UserInputService.InputBegan:Connect(function(input, processed)
+        if processed then return end
+        if input.UserInputType ~= Enum.UserInputType.MouseButton1
+            and input.UserInputType ~= Enum.UserInputType.Touch then return end
+        local pos = input.Position
+        for name, m in pairs(buttons) do
+            if m.hit(pos) then
+                current = m
+                m.active = true
+                m.moved = false
+                m.startPos = pos
+                m.last = pos
+                m.offset = m.frame.AbsolutePosition - pos
+                m.target = pos + m.offset
+                UI.tween(m.frame, 0.1, {Size = UDim2.fromOffset(BTN + 4, BTN + 4)})
+                break
+            end
+        end
+    end)
+
+    UserInputService.InputChanged:Connect(function(input, processed)
+        if processed then return end
+        if not current then return end
+        local t = input.UserInputType
+        if t ~= Enum.UserInputType.MouseMovement and t ~= Enum.UserInputType.Touch then return end
+        local pos = input.Position
+        local delta = (pos - current.last).Magnitude
+        current.last = pos
+        if not current.moved and (pos - current.startPos).Magnitude > MOVE_TH then
+            current.moved = true
+        end
+        current.target = pos + current.offset
+    end)
+
+    UserInputService.InputEnded:Connect(function(input, processed)
+        local t = input.UserInputType
+        if t ~= Enum.UserInputType.MouseButton1 and t ~= Enum.UserInputType.Touch then return end
+        if not current then return end
+        UI.tween(current.frame, 0.1, {Size = UDim2.fromOffset(BTN, BTN)})
+        if current.moved then
+            current.apply(current.target)
+            persist()
+        else
+            current.tap()
+        end
+        current.active = false
+        current = nil
+    end)
 
     -- ------------------------------------------------------------- wiring
     local idx = 0
     for name, act in pairs(ACTIONS) do
         if not QP.Hidden[name] then
             idx = idx + 1
-            local entry = makeButton(name, act, idx)
+            local m = makeButton(name, act, idx)
             local saved = QP.Coords[name]
             if saved and saved.X and saved.Y then
-                entry.frame.Position = UDim2.fromScale(saved.X, saved.Y)
+                m.frame.Position = UDim2.fromScale(saved.X, saved.Y)
             end
-            entry.refresh()
         end
     end
 
-    -- keep every button's on/off look in sync as features change elsewhere
-    local uiSync
-    if UI.quickRefresh then return end
+    -- keep button visuals in sync as features change via menu/hotkey
     KH.spawn(function()
         while KH.Alive do
-            task.wait(0.4)
-            for name, btn in pairs(buttons) do
-                local ok = pcall(btn.refresh)
-                if not ok then break end
+            task.wait(0.35)
+            for name, m in pairs(buttons) do
+                if m.refresh and not m.active then
+                    local ok = pcall(m.refresh)
+                    if not ok then break end
+                end
             end
         end
     end)
