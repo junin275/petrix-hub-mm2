@@ -8,7 +8,7 @@
 --   ╚═╝  ╚═╝╚═╝   ╚═╝      ╚═╝      ╚═╝       ╚═╝  ╚═╝ ╚═════╝ ╚═════╝
 --
 --   Murder Mystery 2  ·  native Roblox UI, no Drawing API
---   build 3.0.0+b03e92b0  ·  2026-09-01 14:30 UTC
+--   build 3.0.0+ee4890eb  ·  2026-09-01 14:42 UTC
 --
 --   GENERATED FILE — do not edit directly.
 --   Sources live in src/mm2/ ; rebuild with `python build.py`.
@@ -5942,11 +5942,23 @@ do
         pcall(function() Config.save(S.UI.Profile) end)
     end
 
+    -- Default screen positions (fraction of the viewport), spread over the
+    -- corners instead of the centre so the buttons never block the crosshair:
+    -- Fly sits centred at the top, the other four sit two up / two down on the
+    -- left and right, each held back from the edge. Drag still lets you pin
+    -- them anywhere once "Move Buttons" is on.
+    local INITIAL_POS = {
+        Aimbot  = { X = 0.08, Y = 0.12 },
+        Fly     = { X = 0.5,  Y = 0.06 },
+        Noclip  = { X = 0.08, Y = 0.88 },
+        ESP     = { X = 0.92, Y = 0.12 },
+        Speed   = { X = 0.92, Y = 0.88 },
+    }
+
     local function makeButton(name, act, index)
-        -- start each button spread out near the centre so you can grab and
-        -- drag them; positions are pinned wherever you drop them.
-        local sx = 0.5 + ((index - 1) % 3 - 1) * 0.045
-        local sy = 0.5 + math.floor((index - 1) / 3) * 0.045
+        local start = INITIAL_POS[name] or { X = 0.08, Y = 0.12 }
+        local sx = start.X
+        local sy = start.Y
         local frame = make("Frame", {
             Name = "Quick_" .. name,
             Size = UDim2.fromOffset(BTN, BTN),
