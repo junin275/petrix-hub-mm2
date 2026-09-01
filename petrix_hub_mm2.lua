@@ -8,7 +8,7 @@
 --   ╚═╝  ╚═╝╚═╝   ╚═╝      ╚═╝      ╚═╝       ╚═╝  ╚═╝ ╚═════╝ ╚═════╝
 --
 --   Murder Mystery 2  ·  native Roblox UI, no Drawing API
---   build 3.0.0+ab3bcb35  ·  2026-08-31 22:50 UTC
+--   build 3.0.0+60a85fa2  ·  2026-09-01 13:24 UTC
 --
 --   GENERATED FILE — do not edit directly.
 --   Sources live in src/mm2/ ; rebuild with `python build.py`.
@@ -5942,7 +5942,6 @@ do
         -- ---- drag (pin on release) + tap to toggle
         local dragging = false
         local moved = false
-        local lastPos
 
         local function applyVisual()
             local on = act.get and act.get() or false
@@ -5962,46 +5961,51 @@ do
             end
         end
 
+        -- Drag keeps the button pinned to the grab point (offset), so it never
+        -- jumps — works identically for mouse and touch.
+        local activeInput = nil
+        local grabOffset = Vector2.new()
+
         frame.InputBegan:Connect(function(input)
             if input.UserInputType ~= Enum.UserInputType.MouseButton1
                 and input.UserInputType ~= Enum.UserInputType.Touch then return end
             dragging = true
             moved = false
-            lastPos = input.Position
+            activeInput = input
+            grabOffset = frame.AbsolutePosition - input.Position
         end)
         frame.InputEnded:Connect(function(input)
             if input.UserInputType ~= Enum.UserInputType.MouseButton1
                 and input.UserInputType ~= Enum.UserInputType.Touch then return end
-            if dragging and not moved then
-                -- tap: toggle the action
-                local cur = act.get and act.get() or false
-                act.set(not cur)
-                applyVisual()
+            if activeInput and input == activeInput then
+                if not moved then
+                    -- tap: toggle the action
+                    local cur = act.get and act.get() or false
+                    act.set(not cur)
+                    applyVisual()
+                else
+                    persist(name)
+                end
+                activeInput = nil
             end
             dragging = false
         end)
-        -- live move while dragging
+
         local conn
         conn = UserInputService.InputChanged:Connect(function(input)
             if not dragging then return end
             if input.UserInputType ~= Enum.UserInputType.MouseMovement
                 and input.UserInputType ~= Enum.UserInputType.Touch then return end
-            local dx = input.Position.X - lastPos.X
-            local dy = input.Position.Y - lastPos.Y
-            local aa = frame.AbsolutePosition + Vector2.new(dx, dy)
+            local target = input.Position + grabOffset
+            local oa = Overlay.AbsolutePosition
             local W = Overlay.AbsoluteSize
-            local nx = math.clamp((aa.X / W.X) or 0, 0, 1)
-            local ny = math.clamp((aa.Y / W.Y) or 0, 0, 1)
+            local nx = math.clamp(((target.X - oa.X) / W.X) or 0, 0, 1)
+            local ny = math.clamp(((target.Y - oa.Y) / W.Y) or 0, 0, 1)
             frame.Position = UDim2.fromScale(nx, ny)
             QP.Coords[name] = { X = nx, Y = ny }
             moved = true
-            lastPos = input.Position
         end)
-        KH.track(frame.InputBegan and nil or nil)
         KH.track(conn)
-        frame.InputEnded:Connect(function()
-            if moved then persist(name) end
-        end)
 
         -- spin the crosshair forever
         if act.crosshair and iconBits.ring then
