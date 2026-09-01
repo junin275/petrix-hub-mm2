@@ -8,7 +8,7 @@
 --   ╚═╝  ╚═╝╚═╝   ╚═╝      ╚═╝      ╚═╝       ╚═╝  ╚═╝ ╚═════╝ ╚═════╝
 --
 --   Murder Mystery 2  ·  native Roblox UI, no Drawing API
---   build 3.1.0+23cfced4  ·  2026-09-01 22:18 UTC
+--   build 3.1.0+fe4daf83  ·  2026-09-01 22:24 UTC
 --
 --   GENERATED FILE — do not edit directly.
 --   Sources live in src/mm2/ ; rebuild with `python build.py`.
@@ -1157,6 +1157,23 @@ do
     C.Accent = S.UI.Accent
     UI.C = C
 
+    -- ------------------------------------------------------------- i18n
+    -- Every static UI string can be registered here so a language switch can
+    -- re-write it later. Dynamic labels (values, readouts, HUD, keybind
+    -- buttons) are skipped on purpose: they hold runtime data, not UI text.
+    -- Defined early: the search box / tabs / sections are built during load,
+    -- long before any later helper exists.
+    UI.i18n = {}
+    function UI.trackText(obj, prop, original, upper)
+        if not obj or type(original) ~= "string" or original == "" then return end
+        table.insert(UI.i18n, {
+            obj = obj,
+            prop = prop or "Text",
+            original = original,
+            upper = upper or false,
+        })
+    end
+
     -- ------------------------------------------------------- instance sugar
     function UI.make(class, props, children)
         local inst = Instance.new(class)
@@ -1983,21 +2000,6 @@ do
     function UI.nextOrder(section)
         section.order = (section.order or 0) + 1
         return section.order
-    end
-
-    -- ------------------------------------------------------------- i18n
-    -- Every static UI string can be registered here so a language switch can
-    -- re-write it later. Dynamic labels (values, readouts, HUD, keybind
-    -- buttons) are skipped on purpose: they hold runtime data, not UI text.
-    UI.i18n = {}
-    function UI.trackText(obj, prop, original, upper)
-        if not obj or type(original) ~= "string" or original == "" then return end
-        table.insert(UI.i18n, {
-            obj = obj,
-            prop = prop or "Text",
-            original = original,
-            upper = upper or false,
-        })
     end
 
     -- ------------------------------------------------------------- search
