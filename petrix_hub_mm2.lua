@@ -8,7 +8,7 @@
 --   ╚═╝  ╚═╝╚═╝   ╚═╝      ╚═╝      ╚═╝       ╚═╝  ╚═╝ ╚═════╝ ╚═════╝
 --
 --   Murder Mystery 2  ·  native Roblox UI, no Drawing API
---   build 3.0.0+1ca4e890  ·  2026-09-01 14:03 UTC
+--   build 3.0.0+f37d35e4  ·  2026-09-01 14:21 UTC
 --
 --   GENERATED FILE — do not edit directly.
 --   Sources live in src/mm2/ ; rebuild with `python build.py`.
@@ -203,6 +203,10 @@ do
             SilentAim     = false,       -- redirect your own manual shots
             AimAtHead     = false,       -- Head instead of HumanoidRootPart
             NotifyShot    = false,
+            VisualAim     = false,       -- FantiHub-style: swing camera to target
+            OnlyGun       = false,       -- visual aim only acts with the gun drawn
+            Fov           = 120,         -- on-screen FOV radius (pixels) for visual aim
+            ShowFov       = true,        -- draw the FOV ring on screen
         },
         Knife = {
             AutoThrow     = false,
@@ -3634,6 +3638,33 @@ do
     local toggleArmed = false
     Combat.LastTarget = nil
 
+    -- FantiHub-style "visual aim": rather than sending coordinates silently, it
+    -- swings the camera so the on-screen reticle lands on the target. Only acts
+    -- when the target is inside the configured FOV ring. Returns true when it
+    -- turned the camera.
+    function Combat.turnCamera()
+        if not S.Aim.VisualAim then return false end
+        if S.Aim.OnlyGun and not Game.gunTool() then return false end
+
+        local player, char, part = Combat.pickTarget()
+        if not (player and char and part) then return false end
+
+        Combat.LastTarget = player
+
+        local cam = KH.camera()
+        if not cam then return false end
+
+        -- gate on the FOV ring: only swing when the target is on screen and
+        -- within the configured radius of the viewport centre
+        local point, onScreen, depth = U.toScreen(part.Position)
+        if not onScreen then return false end
+        local centre = Vector2.new(cam.ViewportSize.X / 2, cam.ViewportSize.Y / 2)
+        if (point - centre).Magnitude > S.Aim.Fov then return false end
+
+        cam.CFrame = CFrame.lookAt(cam.CFrame.Position, Comb.aimPoint(char, part))
+        return true
+    end
+
     function Combat.isEngaged()
         if not S.Aim.Enabled then return false end
         local mode = S.Aim.Mode
@@ -3672,6 +3703,13 @@ do
 
     KH.onFrame("aimbot", function()
         if not Combat.isEngaged() then return end
+        -- Visual aim is a pure assist: swing the camera to keep the reticle on
+        -- target and let the player shoot by hand. It disables the silent
+        -- auto-fire, which is what makes the FantiHub behaviour visibly distinct.
+        if S.Aim.VisualAim then
+            Combat.turnCamera()
+            return
+        end
         Combat.fireOnce(false)
     end, 30)
 
@@ -4868,6 +4906,25 @@ do
         }))
         UI.slider(accuracy, opt("Aim", "FireRate", {
             text = "Fire Rate", min = 0.05, max = 1, step = 0.05, suffix = "s",
+        }))
+
+        local visual = UI.section(tab, "Visual Aim (FantiHub)")
+        UI.label(visual, "FantiHub-style aim assist: instead of silent aim, it swings your camera so the reticle locks onto the target — only when they're inside the FOV ring. You shoot by hand. Disables the silent auto-fire while on.")
+        UI.toggle(visual, opt("Aim", "VisualAim", {
+            text = "Visual Aim",
+            desc = "Swing the camera toward the locked target.",
+        }))
+        UI.toggle(visual, opt("Aim", "OnlyGun", {
+            text = "Only With Gun",
+            desc = "Only aim-assist while you're holding the gun.",
+        }))
+        UI.slider(visual, opt("Aim", "Fov", {
+            text = "Lock FOV", min = 30, max = 400, step = 5, suffix = "px",
+            desc = "Radius of the on-screen lock window.",
+        }))
+        UI.toggle(visual, opt("Aim", "ShowFov", {
+            text = "Show FOV Ring",
+            desc = "Draw the lock window circle on screen.",
         }))
 
         local extras = UI.section(tab, "Extras")
@@ -6263,6 +6320,22 @@ do
     parts[#parts + 1] = sB
     local spinT = 0
 
+    -- FantiHub-style FOV ring: a circle centred on the viewport showing how
+    -- wide the visual-aim lock window is. Shown only when Visual Aim + ShowFov
+    -- are enabled. Drawn as a perfectly round frame with a strong accent border.
+    local fovRing = make("Frame", {
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.fromScale(0.5, 0.5),
+        Size = UDim2.fromOffset(120, 120),
+        BackgroundColor3 = C.Accent,
+        BackgroundTransparency = 0.92,
+        BorderSizePixel = 0,
+        Visible = false,
+        Parent = marGui,
+    })
+    UI.corner(fovRing, 600)
+    UI.stroke(fovRing, C.Accent, 1, 0.15)
+
     -- resolve the current locked target's on-screen point (or nil)
     local function lockedPoint()
         local target = Comb and Comb.LastTarget
@@ -6306,6 +6379,15 @@ do
 
         for _, p in ipairs(parts) do p.Visible = vis end
         spin.Visible = vis
+
+        -- FOV ring responds to the configured radius, whether or not we are
+        -- currently locked (it shows the size of the lock window).
+        local showFov = S.Aim.VisualAim and S.Aim.ShowFov or false
+        if showFov then
+            local d = math.max(S.Aim.Fov or 120, 8) * 2
+            fovRing.Size = UDim2.fromOffset(d, d)
+        end
+        fovRing.Visible = showFov
 
         if vis then
             spinT = spinT + (dt or 0.016) * 3
