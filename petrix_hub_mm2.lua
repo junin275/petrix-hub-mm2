@@ -8,7 +8,7 @@
 --   ╚═╝  ╚═╝╚═╝   ╚═╝      ╚═╝      ╚═╝       ╚═╝  ╚═╝ ╚═════╝ ╚═════╝
 --
 --   Murder Mystery 2  ·  native Roblox UI, no Drawing API
---   build 3.0.0+4ea6eb76  ·  2026-09-01 13:49 UTC
+--   build 3.0.0+413e6e3d  ·  2026-09-01 13:52 UTC
 --
 --   GENERATED FILE — do not edit directly.
 --   Sources live in src/mm2/ ; rebuild with `python build.py`.
@@ -5907,7 +5907,7 @@ do
             Parent = frame,
         })
         UI.corner(body, 12)
-        UI.stroke(body, C.Stroke, 1, 0)
+        local bodyStroke = UI.stroke(body, C.Stroke, 1, 0)
 
         -- accent glow (animated when active)
         local glow = make("Frame", {
@@ -6008,7 +6008,7 @@ do
                 paintOnOff(on)
             end
             -- edit-mode outline: bright ring so you know touching moves, not toggles
-            UI.tween(body, 0.12, {StrokeColor = editMode() and C.Warn or C.Stroke})
+            UI.tween(bodyStroke, 0.12, {Color = editMode() and C.Warn or C.Stroke})
         end
         applyVisual()
 
