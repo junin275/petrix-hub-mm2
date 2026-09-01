@@ -8,7 +8,7 @@
 --   ╚═╝  ╚═╝╚═╝   ╚═╝      ╚═╝      ╚═╝       ╚═╝  ╚═╝ ╚═════╝ ╚═════╝
 --
 --   Murder Mystery 2  ·  native Roblox UI, no Drawing API
---   build 3.0.0+a31ba6b7  ·  2026-09-01 13:31 UTC
+--   build 3.0.0+975ad8fd  ·  2026-09-01 13:39 UTC
 --
 --   GENERATED FILE — do not edit directly.
 --   Sources live in src/mm2/ ; rebuild with `python build.py`.
@@ -3582,12 +3582,25 @@ do
     function Combat.pickTarget()
         local mode = S.Aim.Target
 
+        -- Always train on the enemy: as the sheriff the danger is the murderer,
+        -- as the murderer the sheriff (and everyone else) is the danger. This
+        -- fixes "it tracks the wrong person" for both sides.
         if mode == "Murderer" then
-            local murderer = Game.murdererPlayer()
-            if not murderer then return nil end
-            local char, part, distance = validate(murderer)
-            if not char then return nil end
-            return murderer, char, part, distance
+            local preferred
+            if Game.amSheriff() then
+                preferred = Game.murdererPlayer()
+            elseif Game.amMurderer() then
+                preferred = Game.sheriffPlayer() or Game.murdererPlayer()
+            else
+                preferred = Game.murdererPlayer()
+            end
+            if preferred then
+                local char, part, distance = validate(preferred)
+                if char then
+                    return preferred, char, part, distance
+                end
+            end
+            -- Fall through to nearest as a safety net.
         end
 
         local bestPlayer, bestChar, bestPart, bestDistance
@@ -6122,6 +6135,153 @@ do
                     if not ok then break end
                 end
             end
+        end
+    end)
+end
+
+-- ─── src/mm2/16_aimmarker.lua ──────────────────────────────────────────
+
+-- ============================================================================
+--  AIM MARKER — on-screen crosshair that locks onto the active target
+-- ============================================================================
+-- Mobile MM2 has no on-screen reticle, so we draw one. Whenever the aimbot is
+-- engaged it appears; when a target is locked it hugs the target's torso on
+-- screen (following them as they move), and when there is no live target it
+-- sits calmly in the centre of the viewport.
+-- ============================================================================
+
+do
+    local UI   = KH.UI
+    local C    = UI.C
+    local S    = KH.S
+    local U    = KH.U
+    local Game = KH.Game
+    local Comb = KH.Combat
+    local make = UI.make
+    local LocalPlayer = KH.LocalPlayer
+
+    local function gparent()
+        local ok, core = pcall(function() return game:GetService("CoreGui") end)
+        if ok and core then return core end
+        return game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
+    end
+
+    local marGui = make("ScreenGui", {
+        Name = "kh_aim_ " .. tostring(math.random(100000, 999999)),
+        ResetOnSpawn = false,
+        IgnoreGuiInset = true,
+        ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+        DisplayOrder = 10007,
+        Parent = gparent(),
+    })
+    KH.own(marGui)
+
+    local GAP, LEN, TH = 6, 11, 2.4
+
+    local function seg(x, y, w, h)
+        return make("Frame", {
+            Size = UDim2.fromOffset(w, h),
+            Position = UDim2.fromOffset(x, y),
+            BackgroundColor3 = C.Bad,
+            BackgroundTransparency = 0.25,
+            BorderSizePixel = 0,
+            Parent = marGui,
+        })
+    end
+
+    -- classic 4-piece crosshair around an empty centre gap
+    local top   = seg(-TH / 2, -GAP - LEN, TH, LEN)
+    local bot   = seg(-TH / 2, GAP, TH, LEN)
+    local left  = seg(-GAP - LEN, -TH / 2, LEN, TH)
+    local right = seg(GAP, -TH / 2, LEN, TH)
+    local dot   = make("Frame", {
+        Size = UDim2.fromOffset(3, 3),
+        Position = UDim2.fromOffset(-1.5, -1.5),
+        BackgroundColor3 = C.Bad,
+        BackgroundTransparency = 0.35,
+        BorderSizePixel = 0,
+        Parent = marGui,
+    })
+    UI.corner(dot, 2)
+
+    local parts = {top, bot, left, right, dot}
+
+    -- A tiny inner crosshair that spins while locked, for flair
+    local spin = make("Frame", {
+        Size = UDim2.fromOffset(18, 18),
+        Position = UDim2.fromOffset(-9, -9),
+        BackgroundTransparency = 1,
+        Parent = marGui,
+    })
+    local sA = make("Frame", {
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.fromScale(0.5, 0.5),
+        Size = UDim2.fromOffset(16, 2),
+        BackgroundColor3 = C.Bad,
+        BackgroundTransparency = 0.55,
+        BorderSizePixel = 0,
+        Parent = spin,
+    })
+    local sB = make("Frame", {
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.fromScale(0.5, 0.5),
+        Size = UDim2.fromOffset(2, 16),
+        BackgroundColor3 = C.Bad,
+        BackgroundTransparency = 0.55,
+        BorderSizePixel = 0,
+        Parent = spin,
+    })
+    parts[#parts + 1] = sA
+    parts[#parts + 1] = sB
+    local spinT = 0
+
+    -- resolve the current locked target's on-screen point (or nil)
+    local function lockedPoint()
+        local target = Comb and Comb.LastTarget
+        if not target then return nil end
+        if target == LocalPlayer then return nil end
+        if not Game.isAlive(target) then return nil end
+        local char = U.charOf(target)
+        if not char then return nil end
+        local part = S.Aim.AimAtHead and char:FindFirstChild("Head") or U.torsoOf(char)
+        if not part then return nil end
+        local pos, onScreen = U.toScreen(part.Position)
+        if not onScreen then return nil end
+        return pos
+    end
+
+    local RunService   = KH.Services.RunService
+
+    RunService.RenderStepped:Connect(function(dt)
+        local engaged = Comb and (Comb.isEngaged and Comb.isEngaged() or false) or false
+        local pt = engaged and lockedPoint() or nil
+
+        local cam = KH.camera() or workspace.CurrentCamera
+        local cx, cy = 0, 0
+        if engaged then
+            if pt then
+                cx, cy = pt.X, pt.Y
+            elseif cam and cam.ViewportSize then
+                cx = cam.ViewportSize.X / 2
+                cy = cam.ViewportSize.Y / 2
+            end
+        end
+
+        local vis = engaged
+
+        dot.Position   = UDim2.fromOffset(cx - 1.5, cy - 1.5)
+        top.Position   = UDim2.fromOffset(cx - TH / 2, cy - GAP - LEN)
+        bot.Position   = UDim2.fromOffset(cx - TH / 2, cy + GAP)
+        left.Position  = UDim2.fromOffset(cx - GAP - LEN, cy - TH / 2)
+        right.Position = UDim2.fromOffset(cx + GAP, cy - TH / 2)
+        spin.Position  = UDim2.fromOffset(cx - 9, cy - 9)
+
+        for _, p in ipairs(parts) do p.Visible = vis end
+        spin.Visible = vis
+
+        if vis then
+            spinT = spinT + (dt or 0.016) * 3
+            spin.Rotation = (spinT * 57.2958) % 360
         end
     end)
 end
