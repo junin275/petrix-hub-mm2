@@ -8,7 +8,7 @@
 --   ╚═╝  ╚═╝╚═╝   ╚═╝      ╚═╝      ╚═╝       ╚═╝  ╚═╝ ╚═════╝ ╚═════╝
 --
 --   Murder Mystery 2  ·  native Roblox UI, no Drawing API
---   build 3.1.0+f3d4b45c  ·  2026-09-01 22:47 UTC
+--   build 3.1.0+aeb21294  ·  2026-09-01 22:49 UTC
 --
 --   GENERATED FILE — do not edit directly.
 --   Sources live in src/mm2/ ; rebuild with `python build.py`.
@@ -209,6 +209,7 @@ do
             ShowFov       = true,        -- draw the FOV ring on screen
             VisualSpeed   = 10,          -- camera damp rate while chasing a target
             AutoShoot     = false,       -- auto-fire at the held visual-aim lock
+            RolePriority  = true,        -- as murderer, prefer the sheriff over closer innocents
         },
         Knife = {
             AutoThrow     = false,
@@ -3720,6 +3721,35 @@ do
 
     -- Choose the target to chase this frame, acquiring the lock when idle and
     -- dropping stale locks. Returns char, part or nil.
+    --
+    -- Priority is role-aware (Exunys-style target bias): as the murderer the
+    -- sheriff outranks nearby innocents — the lock only falls through to an
+    -- innocent when there is no sheriff inside the FOV. Without this the aimbot
+    -- latched onto whoever was nearest, which let a closer innocent hijack the
+    -- crosshair away from the sheriff.
+    local function candidates()
+        local out = {}
+        for _, player in ipairs(U.otherPlayers()) do
+            local char, part = shootableParts(player)
+            if char and part then
+                if Game.isAlive(player) then
+                    local d = fovDist(part)
+                    if d and d <= S.Aim.Fov then
+                        out[#out + 1] = {player = player, char = char, part = part, dist = d}
+                    end
+                end
+            end
+        end
+        table.sort(out, function(a, b) return a.dist < b.dist end)
+        return out
+    end
+
+    local function preferredRole()
+        if not S.Aim.RolePriority then return nil end
+        if Game.amSheriff() then return "Murderer" end
+        return "Sheriff"
+    end
+
     local function lockTarget()
         if lockedPlayer then
             local char, part = shootableParts(lockedPlayer)
@@ -3732,16 +3762,31 @@ do
             end
             Combat.release()
         end
-        local player, char, part = Combat.pickTarget()
-        if not (player and char and part) then return nil end
-        local d = fovDist(part)
-        if not (d and d <= S.Aim.Fov) then return nil end
-        lockedPlayer = player
-        lockedChar = char
-        Combat.LastTarget = player
-        Combat.LockedPlayer = player
+
+        -- Re-use the normal target picker (role-smarter than plain nearest)
+        -- but it must be a lockable, on-screen target inside the FOV.
+        local cands = candidates()
+        if #cands == 0 then return nil end
+
+        -- With RolePriority, pick the first valid candidate whose role matches;
+        -- otherwise the closest on-screen candidate in the FOV.
+        local target = cands[1]
+        if S.Aim.RolePriority then
+            local want = preferredRole()
+            for _, c in ipairs(cands) do
+                if Game.roleOf(c.player) == want then
+                    target = c
+                    break
+                end
+            end
+        end
+
+        lockedPlayer = target.player
+        lockedChar = target.char
+        Combat.LastTarget = target.player
+        Combat.LockedPlayer = target.player
         Combat.ManageSensitivity(true)
-        return char, part
+        return target.char, target.part
     end
 
     -- FantiHub-style "visual aim": rather than sending coordinates silently, it
@@ -5046,6 +5091,10 @@ do
         UI.toggle(visual, opt("Aim", "OnlyGun", {
             text = "Only With Gun",
             desc = "Only aim-assist while you're holding the gun.",
+        }))
+        UI.toggle(visual, opt("Aim", "RolePriority", {
+            text = "Prioritize Sheriff",
+            desc = "As murderer, lock the sheriff even when an innocent is closer. As sheriff, lock the murderer. Falls back to the closest player otherwise.",
         }))
         UI.slider(visual, opt("Aim", "Fov", {
             text = "Lock FOV", min = 30, max = 400, step = 5, suffix = "px",
