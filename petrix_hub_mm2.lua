@@ -8,7 +8,7 @@
 --   ╚═╝  ╚═╝╚═╝   ╚═╝      ╚═╝      ╚═╝       ╚═╝  ╚═╝ ╚═════╝ ╚═════╝
 --
 --   Murder Mystery 2  ·  native Roblox UI, no Drawing API
---   build 3.0.0+ee4890eb  ·  2026-09-01 14:42 UTC
+--   build 3.0.0+4851800c  ·  2026-09-01 14:45 UTC
 --
 --   GENERATED FILE — do not edit directly.
 --   Sources live in src/mm2/ ; rebuild with `python build.py`.
@@ -5942,23 +5942,17 @@ do
         pcall(function() Config.save(S.UI.Profile) end)
     end
 
-    -- Default screen positions (fraction of the viewport), spread over the
-    -- corners instead of the centre so the buttons never block the crosshair:
-    -- Fly sits centred at the top, the other four sit two up / two down on the
-    -- left and right, each held back from the edge. Drag still lets you pin
-    -- them anywhere once "Move Buttons" is on.
-    local INITIAL_POS = {
-        Aimbot  = { X = 0.08, Y = 0.12 },
-        Fly     = { X = 0.5,  Y = 0.06 },
-        Noclip  = { X = 0.08, Y = 0.88 },
-        ESP     = { X = 0.92, Y = 0.12 },
-        Speed   = { X = 0.92, Y = 0.88 },
-    }
+    -- Default screen positions (fraction of the viewport). All buttons start
+    -- near the centre (in a tight cluster so they are reachable) so we can
+    -- hard-code precise layouts: drag each into place with "Move Buttons", tap
+    -- 📋 Coords to copy the values, and paste them back here as INITIAL_POS.
+    local function centrePos(index)
+        return 0.5 + ((index - 1) % 3 - 1) * 0.04,
+               0.5 + math.floor((index - 1) / 3) * 0.04
+    end
 
     local function makeButton(name, act, index)
-        local start = INITIAL_POS[name] or { X = 0.08, Y = 0.12 }
-        local sx = start.X
-        local sy = start.Y
+        local sx, sy = centrePos(index)
         local frame = make("Frame", {
             Name = "Quick_" .. name,
             Size = UDim2.fromOffset(BTN, BTN),
@@ -6221,6 +6215,69 @@ do
             end
         end
     end
+
+    -- ------------------------------------------------- TEMP: copy coords
+    -- Provisional helper button: read every quick button's live screen
+    -- position (as a fraction) and copy them all to the clipboard so they can
+    -- be pasted back as hard-coded INITIAL_POS values.
+    local copyClip = (type(setclipboard) == "function" and setclipboard)
+        or (type(set_clipboard) == "function" and set_clipboard) or nil
+
+    local copyFrame = make("Frame", {
+        Size = UDim2.fromOffset(74, 74),
+        Position = UDim2.fromScale(0.02, 0.5),
+        AnchorPoint = Vector2.new(0, 0.5),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        Parent = barGui,
+    })
+    KH.own(copyFrame)
+    local copyBody = make("Frame", {
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.fromScale(0.5, 0.5),
+        Size = UDim2.new(1, 0, 1, 0),
+        BackgroundColor3 = C.Warn,
+        BackgroundTransparency = 0.25,
+        BorderSizePixel = 0,
+        Parent = copyFrame,
+    })
+    UI.corner(copyBody, 12)
+    UI.stroke(copyBody, C.Stroke, 1, 0)
+    make("TextLabel", {
+        Text = "📋 Coords",
+        Font = Enum.Font.GothamBold,
+        TextSize = 11,
+        TextWrapped = true,
+        TextColor3 = C.Text,
+        BackgroundTransparency = 1,
+        Size = UDim2.new(1, 0, 1, 0),
+        Parent = copyBody,
+    })
+
+    local function copyCoords()
+        local lines = {}
+        for name, m in pairs(buttons) do
+            local p = m.frame.Position
+            local x = math.floor(p.X.Scale * 10000 + 0.5) / 10000
+            local y = math.floor(p.Y.Scale * 10000 + 0.5) / 10000
+            lines[#lines + 1] = string.format("%s = { X = %.4f, Y = %.4f }", name, x, y)
+        end
+        table.sort(lines)
+        local text = "        " .. table.concat(lines, ",\n        ")
+        if copyClip then
+            local wrote = pcall(function() copyClip(text) end)
+            if wrote then
+                UI.notify({title = "Coords", text = "Copiado para o clipboard:\n" .. text, duration = 4})
+                return
+            end
+        end
+        UI.notify({title = "Coords", text = text, duration = 5})
+    end
+    copyFrame.InputBegan:Connect(function(input)
+        local t = input.UserInputType
+        if t ~= Enum.UserInputType.MouseButton1 and t ~= Enum.UserInputType.Touch then return end
+        copyCoords()
+    end)
 
     -- keep button visuals in sync as features change via menu/hotkey
     KH.spawn(function()
