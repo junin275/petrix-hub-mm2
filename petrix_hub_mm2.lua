@@ -8,7 +8,7 @@
 --   ╚═╝  ╚═╝╚═╝   ╚═╝      ╚═╝      ╚═╝       ╚═╝  ╚═╝ ╚═════╝ ╚═════╝
 --
 --   Murder Mystery 2  ·  native Roblox UI, no Drawing API
---   build 3.0.0+975ad8fd  ·  2026-09-01 13:39 UTC
+--   build 3.0.0+4ea6eb76  ·  2026-09-01 13:49 UTC
 --
 --   GENERATED FILE — do not edit directly.
 --   Sources live in src/mm2/ ; rebuild with `python build.py`.
@@ -291,6 +291,7 @@ do
             Watermark     = true,
             KeybindList   = true,
             Notifications = true,
+            QuickEdit     = false,
             AutoSave      = true,
             Profile       = "default",
         },
@@ -4891,6 +4892,10 @@ do
             kind = "danger",
             callback = function() Combat.killAll() end,
         })
+        UI.toggle(extras, opt("UI", "QuickEdit", {
+            text = "Mover Botões (Atalhos)",
+            desc = "Ligue para arrastar os botões de atalho para a posição desejada na tela.",
+        }))
     end
 
     -- =========================================================== KNIFE TAB
@@ -5803,6 +5808,12 @@ do
     QP.Coords = QP.Coords or {}
     QP.Hidden = QP.Hidden or {}
 
+    -- "Move buttons" edit mode (toggled from the Aimbot tab). When on, touching
+    -- a button drags it; when off, touching only toggles the action.
+    local function editMode()
+        return S.UI and S.UI.QuickEdit or false
+    end
+
     -- dedicated layer, above the menu (menu is 10000, overlay 10001)
     local gparent = (type(gethui) == "function" and gethui())
         or game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui")
@@ -5975,10 +5986,7 @@ do
 
         -- ------------------------------------------------------ state/visual
         local lastOn = nil
-        local function applyVisual()
-            local on = act.get and act.get() or false
-            if on == lastOn then return end
-            lastOn = on
+        local function paintOnOff(on)
             UI.tween(body, 0.12, {
                 BackgroundColor3 = on and C.Card or C.Panel,
                 BackgroundTransparency = on and 0.25 or 0.3,
@@ -5992,6 +6000,15 @@ do
             elseif iconBits.gl then
                 UI.tween(iconBits.gl, 0.12, {TextColor3 = on and C.Accent or C.TextDim})
             end
+        end
+        local function applyVisual()
+            local on = act.get and act.get() or false
+            if on ~= lastOn then
+                lastOn = on
+                paintOnOff(on)
+            end
+            -- edit-mode outline: bright ring so you know touching moves, not toggles
+            UI.tween(body, 0.12, {StrokeColor = editMode() and C.Warn or C.Stroke})
         end
         applyVisual()
 
@@ -6070,6 +6087,11 @@ do
         local pos = input.Position
         for name, m in pairs(buttons) do
             if m.hit(pos) then
+                if not editMode() then
+                    -- normal mode: a tap toggles the action, no drag, no trap
+                    m.tap()
+                    break
+                end
                 current = m
                 m.active = true
                 m.moved = false
@@ -6089,7 +6111,6 @@ do
         local t = input.UserInputType
         if t ~= Enum.UserInputType.MouseMovement and t ~= Enum.UserInputType.Touch then return end
         local pos = input.Position
-        local delta = (pos - current.last).Magnitude
         current.last = pos
         if not current.moved and (pos - current.startPos).Magnitude > MOVE_TH then
             current.moved = true
@@ -6105,8 +6126,6 @@ do
         if current.moved then
             current.apply(current.target)
             persist()
-        else
-            current.tap()
         end
         current.active = false
         current = nil
