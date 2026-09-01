@@ -8,7 +8,7 @@
 --   ╚═╝  ╚═╝╚═╝   ╚═╝      ╚═╝      ╚═╝       ╚═╝  ╚═╝ ╚═════╝ ╚═════╝
 --
 --   Murder Mystery 2  ·  native Roblox UI, no Drawing API
---   build 3.0.0+f37d35e4  ·  2026-09-01 14:21 UTC
+--   build 3.0.0+b03e92b0  ·  2026-09-01 14:30 UTC
 --
 --   GENERATED FILE — do not edit directly.
 --   Sources live in src/mm2/ ; rebuild with `python build.py`.
@@ -3468,7 +3468,7 @@ do
         if S.ESP.GunESP and drop and drop.Parent then
             seen[drop] = true
             if not markers[drop] then
-                markers[drop] = marker(drop, "GUN", GUN_COLOR, 70, 2000)
+                markers[drop] = marker(drop, "🔫 GUN", GUN_COLOR, 90, 2000)
             end
             if not gunHighlight or not gunHighlight.Parent then
                 gunHighlight = make("Highlight", {
