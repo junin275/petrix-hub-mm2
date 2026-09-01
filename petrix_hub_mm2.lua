@@ -8,7 +8,7 @@
 --   ╚═╝  ╚═╝╚═╝   ╚═╝      ╚═╝      ╚═╝       ╚═╝  ╚═╝ ╚═════╝ ╚═════╝
 --
 --   Murder Mystery 2  ·  native Roblox UI, no Drawing API
---   build 3.0.0+0053ee44  ·  2026-09-01 13:57 UTC
+--   build 3.0.0+1ca4e890  ·  2026-09-01 14:03 UTC
 --
 --   GENERATED FILE — do not edit directly.
 --   Sources live in src/mm2/ ; rebuild with `python build.py`.
@@ -5886,10 +5886,15 @@ do
     end
 
     local function makeButton(name, act, index)
+        -- start each button spread out near the centre so you can grab and
+        -- drag them; positions are pinned wherever you drop them.
+        local sx = 0.5 + ((index - 1) % 3 - 1) * 0.045
+        local sy = 0.5 + math.floor((index - 1) / 3) * 0.045
         local frame = make("Frame", {
             Name = "Quick_" .. name,
             Size = UDim2.fromOffset(BTN, BTN),
-            Position = UDim2.fromScale(0.015, 0.16 + index * 0.115),
+            Position = UDim2.fromScale(sx, sy),
+            AnchorPoint = Vector2.new(0.5, 0.5),
             BackgroundTransparency = 1,
             BorderSizePixel = 0,
             Parent = barGui,
@@ -6047,8 +6052,9 @@ do
         -- apply a screen-space target, clamped into the viewport
         function mode.apply(target)
             local sz = barGui.AbsoluteSize
-            local nx = math.clamp(target.X / math.max(sz.X, 1), 0, 1)
-            local ny = math.clamp(target.Y / math.max(sz.Y, 1), 0, 1)
+            -- frame is anchored at its centre; target is the desired top-left
+            local nx = math.clamp((target.X - BTN / 2) / math.max(sz.X, 1), 0, 1)
+            local ny = math.clamp((target.Y - BTN / 2) / math.max(sz.Y, 1), 0, 1)
             frame.Position = UDim2.fromScale(nx, ny)
             QP.Coords[name] = { X = nx, Y = ny }
         end
