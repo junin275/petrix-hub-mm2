@@ -8,7 +8,7 @@
 --   ╚═╝  ╚═╝╚═╝   ╚═╝      ╚═╝      ╚═╝       ╚═╝  ╚═╝ ╚═════╝ ╚═════╝
 --
 --   Murder Mystery 2  ·  native Roblox UI, no Drawing API
---   build 3.1.0+fe4daf83  ·  2026-09-01 22:24 UTC
+--   build 3.1.0+c97a917b  ·  2026-09-01 22:31 UTC
 --
 --   GENERATED FILE — do not edit directly.
 --   Sources live in src/mm2/ ; rebuild with `python build.py`.
@@ -201,12 +201,13 @@ do
             FireRate      = 0.10,        -- seconds between shots
             KeepEquipped  = true,        -- re-draw the gun if it gets stowed
             SilentAim     = false,       -- redirect your own manual shots
-            AimAtHead     = false,       -- Head instead of HumanoidRootPart
+            AimAtHead     = true,        -- Head instead of HumanoidRootPart
             NotifyShot    = false,
             VisualAim     = false,       -- FantiHub-style: swing camera to target
             OnlyGun       = false,       -- visual aim only acts with the gun drawn
             Fov           = 120,         -- on-screen FOV radius (pixels) for visual aim
             ShowFov       = true,        -- draw the FOV ring on screen
+            VisualSpeed   = 10,          -- camera damp rate while chasing a target
         },
         Knife = {
             AutoThrow     = false,
@@ -3669,29 +3670,38 @@ do
     Combat.LastTarget = nil
 
     -- FantiHub-style "visual aim": rather than sending coordinates silently, it
-    -- swings the camera so the on-screen reticle lands on the target. Only acts
-    -- when the target is inside the configured FOV ring. Returns true when it
-    -- turned the camera.
-    function Combat.turnCamera()
+    -- swings the camera so the on-screen reticle lands on the target. Follows
+    -- the aim point every frame with an exponential damp (see S.Aim.VisualSpeed)
+    -- so the reticle chases the head instead of snapping around.
+    local turnSmooth = nil
+    function Combat.turnCamera(dt)
         if not S.Aim.VisualAim then return false end
         if S.Aim.OnlyGun and not Game.gunTool() then return false end
 
         local player, char, part = Combat.pickTarget()
-        if not (player and char and part) then return false end
+        if not (player and char and part) then
+            turnSmooth = nil
+            return false
+        end
 
         Combat.LastTarget = player
 
         local cam = KH.camera()
         if not cam then return false end
 
-        -- gate on the FOV ring: only swing when the target is on screen and
-        -- within the configured radius of the viewport centre
-        local point, onScreen, depth = U.toScreen(part.Position)
-        if not onScreen then return false end
-        local centre = Vector2.new(cam.ViewportSize.X / 2, cam.ViewportSize.Y / 2)
-        if (point - centre).Magnitude > S.Aim.Fov then return false end
+        -- The reticle must reach the target whatever side of the screen they
+        -- are on, so this is not gated on the FOV ring. The ring (drawn by the
+        -- aim marker) stays as a purely visual lock window — gating on it made
+        -- the camera idle while the "identified" target ran around outside it.
+        local goal = CFrame.lookAt(cam.CFrame.Position, Comb.aimPoint(char, part))
 
-        cam.CFrame = CFrame.lookAt(cam.CFrame.Position, Comb.aimPoint(char, part))
+        local damp = 1 - math.exp(-(dt or 0.016) * (S.Aim.VisualSpeed or 10))
+        if not turnSmooth then
+            turnSmooth = goal
+        else
+            turnSmooth = turnSmooth:Lerp(goal, damp)
+        end
+        cam.CFrame = turnSmooth
         return true
     end
 
@@ -3734,13 +3744,13 @@ do
         return ok, err
     end
 
-    KH.onFrame("aimbot", function()
+    KH.onFrame("aimbot", function(dt)
         if not Combat.isEngaged() then return end
         -- Visual aim is a pure assist: swing the camera to keep the reticle on
         -- target and let the player shoot by hand. It disables the silent
         -- auto-fire, which is what makes the FantiHub behaviour visibly distinct.
         if S.Aim.VisualAim then
-            Combat.turnCamera()
+            Combat.turnCamera(dt)
             return
         end
         Combat.fireOnce(false)
@@ -4942,7 +4952,7 @@ do
         }))
 
         local visual = UI.section(tab, "Visual Aim (FantiHub)")
-        UI.label(visual, "FantiHub-style aim assist: instead of silent aim, it swings your camera so the reticle locks onto the target — only when they're inside the FOV ring. You shoot by hand. Disables the silent auto-fire while on.")
+        UI.label(visual, "FantiHub-style aim assist: instead of silent aim, it swings your camera so the reticle locks onto the target — it chases the head wherever they run. You shoot by hand. Disables the silent auto-fire while on.")
         UI.toggle(visual, opt("Aim", "VisualAim", {
             text = "Visual Aim",
             desc = "Swing the camera toward the locked target.",
@@ -4954,6 +4964,10 @@ do
         UI.slider(visual, opt("Aim", "Fov", {
             text = "Lock FOV", min = 30, max = 400, step = 5, suffix = "px",
             desc = "Radius of the on-screen lock window.",
+        }))
+        UI.slider(visual, opt("Aim", "VisualSpeed", {
+            text = "Visual Speed", min = 3, max = 30, step = 1,
+            desc = "How fast the camera chases the target. Low = smooth pull, high = instant snap.",
         }))
         UI.toggle(visual, opt("Aim", "ShowFov", {
             text = "Show FOV Ring",
