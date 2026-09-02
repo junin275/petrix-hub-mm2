@@ -8,7 +8,7 @@
 --   ╚═╝  ╚═╝╚═╝   ╚═╝      ╚═╝      ╚═╝       ╚═╝  ╚═╝ ╚═════╝ ╚═════╝
 --
 --   Murder Mystery 2  ·  native Roblox UI, no Drawing API
---   build 3.1.0+52a57e25  ·  2026-09-02 15:54 UTC
+--   build 3.1.0+2dd63a2d  ·  2026-09-02 20:37 UTC
 --
 --   GENERATED FILE — do not edit directly.
 --   Sources live in src/mm2/ ; rebuild with `python build.py`.
@@ -5729,7 +5729,17 @@ do
                 "Polski", "Svenska", "עברית", "Indonesia", "Ελληνικά",
                 "Українська", "Čeština",
             },
-            get = function() return KH.Lang and KH.Lang.display or "English" end,
+            get = function()
+                local Lang = KH.Lang
+                -- Prefer the canonical display of the last applied code so the
+                -- dropdown always matches what is really on screen.
+                local disp = Lang and Lang.display or nil
+                if disp ~= nil and disp ~= "" then return disp end
+                -- Fall back to the last saved selection while it syncs.
+                local saved = S.UI.Language
+                if saved and saved ~= "" then return saved end
+                return "English"
+            end,
             set = function(displayName)
                 local Lang = KH.Lang
                 if not Lang then return end
@@ -7344,6 +7354,19 @@ do
     function Lang.apply(name)
         local code = codeOf(name) or "en"
         Lang.display = CODENAME[code] or name or "English"
+        -- PT (and EN) are fully offline — the dictionary covers the whole UI —
+        -- so apply instantly and never let a stuck online translation block or
+        -- delay them. This is what makes Português/English reliable every time.
+        if code == "pt" then
+            local ok = pcall(applySync, "pt")
+            Lang.busy = false
+            UI.notify({title = "Language", text = ok and "UI translated to Português." or "Could not apply translation.", kind = ok and "good" or "warn", duration = 3})
+            return ok
+        end
+        if code == "en" then
+            Lang.reset()
+            return true
+        end
         if Lang.busy then
             UI.notify({title = "Language", text = "Still translating…", kind = "warn"})
             return false
@@ -7378,15 +7401,24 @@ do
     end
 
     -- Auto re-apply a saved language once the whole menu (all tabs) exists.
-    task.delay(1.5, function()
+    -- Wait until the UI stops growing (all tabs built) so the first apply covers
+    -- every registered text instead of racing the menu construction.
+    local function tryReapply()
         if not KH.Alive then return end
         local saved = S.UI.Language or "English"
         local code = codeOf(saved)
         if not code or code == "en" then return end
+        local n = UI.i18n and #UI.i18n or 0
+        if n < 10 then
+            task.delay(0.5, tryReapply)
+            return
+        end
         if not Lang.cache[code] then Lang.cache[code] = Lang.loadCache(code) end
+        Lang.display = CODENAME[code] or saved
         KH.detach(function()
             pcall(applySync, code)
             Lang.busy = false
         end)
-    end)
+    end
+    task.delay(0.5, tryReapply)
 end
