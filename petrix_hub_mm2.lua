@@ -8,7 +8,7 @@
 --   ╚═╝  ╚═╝╚═╝   ╚═╝      ╚═╝      ╚═╝       ╚═╝  ╚═╝ ╚═════╝ ╚═════╝
 --
 --   Murder Mystery 2  ·  native Roblox UI, no Drawing API
---   build 3.1.0+cf4af073  ·  2026-09-02 14:47 UTC
+--   build 3.1.0+5d0b31d3  ·  2026-09-02 14:52 UTC
 --
 --   GENERATED FILE — do not edit directly.
 --   Sources live in src/mm2/ ; rebuild with `python build.py`.
@@ -3813,7 +3813,7 @@ do
         local cam = KH.camera()
         if not cam then return false end
 
-        local goal = CFrame.lookAt(cam.CFrame.Position, Comb.aimPoint(char, part))
+        local goal = CFrame.lookAt(cam.CFrame.Position, Combat.aimPoint(char, part))
         local damp = 1 - math.exp(-(dt or 0.016) * (S.Aim.VisualSpeed or 10))
         if not turnSmooth then
             turnSmooth = goal
@@ -3996,7 +3996,7 @@ do
                 local charNow = t.char or U.charOf(t.player)
                 local partNow = charNow and (S.Aim.AimAtHead and charNow:FindFirstChild("Head") or U.torsoOf(charNow))
                 if charNow and partNow then
-                    local goal = CFrame.lookAt(cam.CFrame.Position, Comb.aimPoint(charNow, partNow))
+                    local goal = CFrame.lookAt(cam.CFrame.Position, Combat.aimPoint(charNow, partNow))
                     -- Ease from wherever the camera is now toward the target so
                     -- the sweep is clearly visible rather than a hard cut.
                     for step = 1, 8 do
