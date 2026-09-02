@@ -8,7 +8,7 @@
 --   ╚═╝  ╚═╝╚═╝   ╚═╝      ╚═╝      ╚═╝       ╚═╝  ╚═╝ ╚═════╝ ╚═════╝
 --
 --   Murder Mystery 2  ·  native Roblox UI, no Drawing API
---   build 3.1.0+2dd63a2d  ·  2026-09-02 20:37 UTC
+--   build 3.1.0+ee48f814  ·  2026-09-02 21:08 UTC
 --
 --   GENERATED FILE — do not edit directly.
 --   Sources live in src/mm2/ ; rebuild with `python build.py`.
@@ -1177,6 +1177,28 @@ do
         })
     end
 
+    -- ------------------------------------------------------------- t()
+    -- Resolve a single string into the current language at runtime. Used for
+    -- text that is written once but should read fresh each time it appears
+    -- (notifications, dropdown option labels). Returns the string unchanged
+    -- when no translation is loaded yet. Because 17_language loads after this
+    -- module, KH.Lang is resolved lazily at every call — never at load time.
+    function UI.t(original)
+        if type(original) ~= "string" or original == "" then return original end
+        local Lang = KH.Lang
+        if not Lang or Lang.code == "en" or not Lang.code then return original end
+        local map = Lang.cache and Lang.cache[Lang.code]
+        if map and map[original] then return map[original] end
+        return original
+    end
+
+    -- Non-static variant of trackText: it tracks an object whose text may come
+    -- from a translated string, but unlike trackText it also re-applies via
+    -- UI.t() so a language switch refreshes it even if it holds translated text.
+    function UI.trackDynamic(entry)
+        if entry and entry.obj then table.insert(UI.i18n, entry) end
+    end
+
     -- ------------------------------------------------------- instance sugar
     function UI.make(class, props, children)
         local inst = Instance.new(class)
@@ -1301,6 +1323,252 @@ do
     UI.Screen  = newScreen("kh_" .. suffix, 10000)
     UI.World   = newScreen("kw_" .. suffix, 9998)  -- ESP layer, below the menu
     UI.Overlay = newScreen("ko_" .. suffix, 10001) -- notifications, watermark
+
+    -- ------------------------------------------------------------ floating
+    -- Detachable panels (e.g. a section long-pressed into its own draggable,
+    -- minimisable control window). Lives above the menu on the overlay so a
+    -- floating panel never sits under the rest of the interface.
+    local Floats = make("Frame", {
+        Name = "Floats",
+        Size = UDim2.fromScale(1, 1),
+        BackgroundTransparency = 1,
+        ZIndex = 500,
+        Parent = UI.Overlay,
+    })
+    UI.Floats = Floats
+
+    -- Reusable draggable floating window. Returns an object with:
+    --   .frame  : the window root (shown while "open")
+    --   .bar    : the minimised bar (shown while collapsed)
+    --   .open() / .min() / .close() / .destroy()
+    -- Dragging is handled for both mouse and touch via InputChanged while held.
+    function UI.makeFloat(title, content)
+        content = content or {}
+        local W, H = 260, 0
+
+        local frame = make("Frame", {
+            Name = "Float",
+            Size = UDim2.fromOffset(W, 0),
+            Position = UDim2.fromScale(0.5, 0.45),
+            AnchorPoint = Vector2.new(0.5, 0),
+            BackgroundColor3 = C.Card,
+            BorderSizePixel = 0,
+            Visible = false,
+            ZIndex = 600,
+            Parent = Floats,
+        })
+        UI.corner(frame, 10)
+        UI.stroke(frame, C.Stroke, 1, 0.5)
+        pcall(function() UI.shadow(frame, 16, 0.5) end)
+        frame.AutomaticSize = Enum.AutomaticSize.Y
+
+        -- title bar with drag handle + − / X
+        local bar = make("Frame", {
+            Name = "FloatBar",
+            Size = UDim2.new(1, 0, 0, 32),
+            BackgroundColor3 = C.Row,
+            BorderSizePixel = 0,
+            ZIndex = 601,
+            Parent = frame,
+        })
+        UI.corner(bar, 10)
+        make("UICorner", {
+            CornerRadius = UDim.new(0, 10),
+            Parent = bar,
+        })
+        -- clip only the bottom corners so the bar sits flush against the body
+        pcall(function()
+            local c = bar:FindFirstChildOfClass("UICorner") or Instance.new("UICorner")
+            c:Destroy()
+            UI.corner(bar, 10)
+        end)
+
+        local titleText = make("TextLabel", {
+            Name = "FloatTitle",
+            Text = title or "",
+            Font = Enum.Font.GothamBold,
+            TextSize = 12,
+            TextColor3 = C.Text,
+            BackgroundTransparency = 1,
+            Position = UDim2.fromOffset(10, 0),
+            Size = UDim2.new(1, -76, 1, 0),
+            TextXAlignment = Enum.TextXAlignment.Left,
+            Parent = bar,
+        })
+        UI.trackText(titleText, "Text", title or "")
+
+        local minBtn = make("TextButton", {
+            Name = "Min",
+            Text = "−",
+            Font = Enum.Font.GothamBold,
+            TextSize = 15,
+            TextColor3 = C.Text,
+            AutoButtonColor = false,
+            BackgroundColor3 = C.Card,
+            BorderSizePixel = 0,
+            AnchorPoint = Vector2.new(1, 0.5),
+            Position = UDim2.new(1, -56, 0.5, 0),
+            Size = UDim2.fromOffset(22, 22),
+            Parent = bar,
+        })
+        UI.corner(minBtn, 6)
+        local xBtn = make("TextButton", {
+            Name = "Close",
+            Text = "✕",
+            Font = Enum.Font.GothamBold,
+            TextSize = 12,
+            TextColor3 = C.Text,
+            AutoButtonColor = false,
+            BackgroundColor3 = C.Card,
+            BorderSizePixel = 0,
+            AnchorPoint = Vector2.new(1, 0.5),
+            Position = UDim2.new(1, -8, 0.5, 0),
+            Size = UDim2.fromOffset(22, 22),
+            Parent = bar,
+        })
+        UI.corner(xBtn, 6)
+
+        minBtn.MouseEnter:Connect(function() tween(minBtn, 0.1, {BackgroundColor3 = C.Accent}) end)
+        minBtn.MouseLeave:Connect(function() tween(minBtn, 0.1, {BackgroundColor3 = C.Card}) end)
+        xBtn.MouseEnter:Connect(function() tween(xBtn, 0.1, {BackgroundColor3 = C.Bad}) end)
+        xBtn.MouseLeave:Connect(function() tween(xBtn, 0.1, {BackgroundColor3 = C.Card}) end)
+
+        local body = make("Frame", {
+            Name = "FloatBody",
+            Size = UDim2.new(1, 0, 0, 0),
+            BackgroundTransparency = 1,
+            ZIndex = 602,
+            Parent = frame,
+        })
+        body.AutomaticSize = Enum.AutomaticSize.Y
+        UI.pad(body, 0, 8, 8, 8, 8)
+
+        -- drag handle (mouse + touch)
+        local dragging, dragStart, frameStart
+        bar.InputBegan:Connect(function(input, gpe)
+            if gpe then return end
+            if input.UserInputType == Enum.UserInputType.MouseButton1
+                or input.UserInputType == Enum.UserInputType.Touch then
+                dragging = true
+                dragStart = input.Position
+                frameStart = frame.Position
+            end
+        end)
+        UserInputService.InputChanged:Connect(function(input, gpe)
+            if not dragging then return end
+            if input.UserInputType ~= Enum.UserInputType.MouseMovement
+                and input.UserInputType ~= Enum.UserInputType.Touch then return end
+            local delta = input.Position - dragStart
+            -- move anchors off so we can drag freely in offset space
+            frame.AnchorPoint = Vector2.new(0, 0)
+            local base = frameStart.X.Offset or 0
+            local bp = frameStart.Y.Offset or 0
+            frame.Position = UDim2.fromOffset(
+                math.clamp(base + delta.X, -W + 60, Floats.AbsoluteSize.X - 60),
+                math.clamp(bp + delta.Y, 8, math.max(8, Floats.AbsoluteSize.Y - 40))
+            )
+        end)
+        UserInputService.InputEnded:Connect(function(input, gpe)
+            if gpe then return end
+            if input.UserInputType == Enum.UserInputType.MouseButton1
+                or input.UserInputType == Enum.UserInputType.Touch then
+                dragging = false
+            end
+        end)
+
+        -- body content: optional scroll frame wrapper for long sections
+        local scroll = make("ScrollingFrame", {
+            Size = UDim2.new(1, 0, 0, 0),
+            BackgroundTransparency = 1,
+            BorderSizePixel = 0,
+            ScrollBarThickness = 3,
+            ZIndex = 603,
+            Parent = body,
+        })
+        scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+        UI.list(scroll, 6)
+        UI.pad(scroll, 0, 0, 4, 4, 4)
+        for i, inst in ipairs(content) do
+            if typeof(inst) == "Instance" then inst.Parent = scroll end
+        end
+        scroll.Size = UDim2.new(1, 0, 0, math.max(80, content and #content * 40 or 80))
+
+        -- minimise bar (floating pill shown while collapsed)
+        local minBar = make("TextButton", {
+            Name = "MinBar",
+            Text = title or "",
+            Font = Enum.Font.GothamBold,
+            TextSize = 12,
+            TextColor3 = C.Text,
+            BackgroundColor3 = C.Card,
+            BorderSizePixel = 0,
+            AutoButtonColor = false,
+            Position = UDim2.fromScale(0.5, 0.98),
+            AnchorPoint = Vector2.new(0.5, 1),
+            Size = UDim2.new(0, 0, 0, 30),
+            Visible = false,
+            ZIndex = 600,
+            Parent = Floats,
+        })
+        UI.corner(minBar, 15)
+        UI.stroke(minBar, C.Stroke, 1, 0.5)
+        UI.trackText(minBar, "Text", title or "")
+
+        -- sizing: pill grows with title
+        minBar.Size = UDim2.fromOffset(W, 30)
+
+        local self = { frame = frame, bar = minBar, title = titleText, body = body, onRestore = nil }
+
+        function self.open()
+            minBar.Visible = false
+            frame.Visible = true
+            pcall(function()
+                tween(frame, 0.16, {BackgroundTransparency = 0})
+            end)
+        end
+        function self.min()
+            pcall(function()
+                tween(frame, 0.12, {BackgroundTransparency = 0.55})
+            end)
+            task.delay(0.12, function()
+                frame.Visible = false
+                minBar.Visible = true
+                pcall(function()
+                    tween(minBar, 0.18, {BackgroundTransparency = 0})
+                end)
+            end)
+        end
+        -- Close calls onRestore (e.g. return the card into the menu) when the
+        -- caller supplied one; otherwise it just hides the window. The restore
+        -- must move the content OUT before the window is destroyed, otherwise
+        -- destroying the float would take the section's controls down with it.
+        function self.close()
+            frame.Visible = false
+            minBar.Visible = false
+            if self.onRestore then
+                pcall(self.onRestore)
+            end
+            task.delay(0.05, function()
+                if frame and frame.Parent then frame:Destroy() end
+                if minBar and minBar.Parent then minBar:Destroy() end
+            end)
+        end
+
+        minBtn.MouseButton1Click:Connect(function() self.min() end)
+        minBtn.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.Touch then self.min() end
+        end)
+        xBtn.MouseButton1Click:Connect(function() self.close() end)
+        xBtn.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.Touch then self.close() end
+        end)
+        minBar.MouseButton1Click:Connect(function() self.open() end)
+        minBar.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.Touch then self.open() end
+        end)
+
+        return self, titleText
+    end
 
     -- ---------------------------------------------------------- drop shadow
     -- Standard 9-slice shadow image; if the asset ever fails to resolve it just
@@ -1995,6 +2263,101 @@ do
 
         local section = {card = card, body = body, rows = {}, tab = tab, order = 0}
         table.insert(tab.sections, section)
+
+        -- ---------------------------------------------- long-press → float
+        -- Hold a section's title for a moment to detach the whole card into a
+        -- draggable, minimisable floating control window. Reusable: every
+        -- section gets this behaviour. A tap (no hold) does nothing, so touch
+        -- and mouse don't trigger accidental detaches.
+        section.float = nil
+        section.detached = false
+        section.title = titleLabel
+
+        local HOLD_MS = 550
+        local holdThread
+
+        local function done()
+            if holdThread then holdThread = nil end
+            tween(titleLabel, 0.12, {TextColor3 = C.TextDim})
+        end
+
+        -- On close (X) the floating window hands its content back to the menu.
+        local function restore(section, card)
+            card.Parent = tab.page
+            card.LayoutOrder = tab.order
+            card.Size = UDim2.new(1, 0, 0, 0)
+            card.AutomaticSize = Enum.AutomaticSize.Y
+            card.Visible = true
+            card.ZIndex = 1
+            section.detached = false
+            section.float = nil
+        end
+
+        local function detachNow()
+            if section.detached then return end
+            section.detached = true
+            done()
+            local titleLabelText = titleText
+            -- Reparent the card into a fresh floating control window.
+            local fl = UI.makeFloat(titleLabelText, {})
+            -- Move the card (with all its controls + state) into the float.
+            card.Size = UDim2.new(1, 0, 0, 0)
+            card.AutomaticSize = Enum.AutomaticSize.Y
+            card.ZIndex = 2
+            card.Parent = fl.body:FindFirstChildOfClass("ScrollingFrame") or fl.body
+            -- float body scroll height
+            local scroll = fl.body and fl.body:FindFirstChildOfClass("ScrollingFrame")
+            if scroll then
+                local target = math.max(90, #section.rows * 42 + 40)
+                scroll.Size = UDim2.new(1, 0, 0, math.min(target, 380))
+            end
+            fl.frame.Position = UDim2.new(0.5, 0, 0.35, 0)
+            fl.frame.AnchorPoint = Vector2.new(0.5, 0)
+            fl.open()
+            section.float = fl
+            -- Closing (X) must give the card back to the menu, so the float's
+            -- onRestore callback reparents it beneath its original tab page.
+            fl.onRestore = function()
+                restore(section, card)
+            end
+        end
+
+        local function startHold()
+            if holdThread then return end
+            holdThread = task.spawn(function()
+                -- Loop ~HOLD_MS; the InputEnded handler flips holdThread to nil
+                -- as the cancel signal, so a plain tap never detaches.
+                for _ = 1, HOLD_MS, 50 do
+                    task.wait(0.05)
+                    if not holdThread then return end
+                end
+                holdThread = nil
+                tween(titleLabel, 0.1, {TextColor3 = C.Accent})
+                -- small dwell so the highlight is visible before the move
+                task.wait(0.12)
+                detachNow()
+            end)
+        end
+
+        titleLabel.InputBegan:Connect(function(input, gpe)
+            if gpe then return end
+            if input.UserInputType == Enum.UserInputType.MouseButton1
+                or input.UserInputType == Enum.UserInputType.Touch then
+                startHold()
+            end
+        end)
+        titleLabel.InputEnded:Connect(function(input, gpe)
+            if gpe then return end
+            if input.UserInputType == Enum.UserInputType.MouseButton1
+                or input.UserInputType == Enum.UserInputType.Touch then
+                if holdThread then
+                    -- released before the hold completed → plain tap, do nothing
+                    holdThread = nil
+                    done()
+                end
+            end
+        end)
+
         return section
     end
 
@@ -2183,7 +2546,7 @@ do
         })
 
         make("TextLabel", {
-            Text = opts.title or "Petrix Hub",
+            Text = UI.t(opts.title) or "Petrix Hub",
             Font = Enum.Font.GothamBold,
             TextSize = 13,
             TextColor3 = C.Text,
@@ -2197,7 +2560,7 @@ do
         local text = opts.text or ""
         if text ~= "" then
             make("TextLabel", {
-                Text = text,
+                Text = UI.t(text),
                 Font = Enum.Font.Gotham,
                 TextSize = 12,
                 TextColor3 = C.TextDim,
@@ -2668,10 +3031,13 @@ do
         local control = {}
 
         function control.refresh()
-            current.Text = tostring(opts.get and opts.get() or "—")
+            local raw = tostring(opts.get and opts.get() or "—")
+            -- Show the translated label, but remember the raw value for the
+            -- selection highlight and for feeding back through commit().
+            current.Text = UI.t(raw)
             for _, child in ipairs(panelList:GetChildren()) do
                 if child:IsA("TextButton") then
-                    local selected = child.Name == current.Text
+                    local selected = child.Name == raw
                     child.BackgroundTransparency = selected and 0.85 or 1
                     child.TextColor3 = selected and C.Text or C.TextDim
                 end
@@ -2692,9 +3058,12 @@ do
         end
 
         local function buildEntry(option)
+            -- Name keeps the raw value (for commit + the selected highlight);
+            -- Text shows the translated label so a language switch redraws it.
+            local label = UI.t(tostring(option))
             local entry = make("TextButton", {
                 Name = tostring(option),
-                Text = tostring(option),
+                Text = label,
                 Font = Enum.Font.Gotham,
                 TextSize = 12,
                 TextColor3 = C.TextDim,
@@ -2707,6 +3076,9 @@ do
             })
             UI.corner(entry, 5)
             UI.accented(entry, "BackgroundColor3")
+            -- Track the label so a live retranslation rewrites it without
+            -- touching the Name/value.
+            UI.trackDynamic({ obj = entry, prop = "Text", original = tostring(option), get = function() return UI.t(tostring(option)) end })
             entry.MouseButton1Click:Connect(function()
                 commit(opts, option)
                 control.refresh()
@@ -6338,7 +6710,7 @@ do
                 ring, horiz, vert, dot
         else
             local gl = make("TextLabel", {
-                Text = act.glyph or act.label,
+                Text = act.glyph or UI.t(act.label),
                 Font = Enum.Font.GothamBold,
                 TextSize = 11,
                 TextColor3 = C.TextDim,
@@ -6350,7 +6722,7 @@ do
         end
 
         local label = make("TextLabel", {
-            Text = act.label,
+            Text = UI.t(act.label),
             Font = Enum.Font.GothamBold,
             TextSize = 11,
             TextColor3 = C.TextDim,
@@ -7017,6 +7389,46 @@ do
             ["Find a different public server for this place."] = "Encontra um servidor público diferente para este lugar.",
             ["Unload Petrix Hub"] = "Descarregar Petrix Hub",
             ["Remove the menu and undo every change."] = "Remove o menu e desfaz todas as alterações.",
+
+            ["Nearest"] = "Mais Próximo",
+            ["Crosshair"] = "Mira",
+            ["Hold"] = "Segurar",
+            ["Toggle"] = "Alternar",
+            ["Always"] = "Sempre",
+            ["Corner"] = "Canto",
+            ["Full"] = "Completo",
+            ["Bottom"] = "Inferior",
+            ["Center"] = "Centro",
+            ["Smooth"] = "Suave",
+            ["Walk"] = "Andar",
+            ["Humanoid"] = "Humanoid",
+            ["CFrame"] = "CFrame",
+            ["(none saved)"] = "(nenhum salvo)",
+            ["default"] = "padrão",
+            ["Locked on"] = "Travado",
+            ["No other servers with room."] = "Nenhum outro servidor com vaga.",
+            ["No dropped gun right now."] = "Nenhuma arma caída agora.",
+            ["You are not holding a gun."] = "Você não está segurando uma arma.",
+            ["You are not holding a knife."] = "Você não está segurando uma faca.",
+            ["Picked up the dropped gun."] = "Pegou a arma caída.",
+            ["Bailed out of knife range."] = "Saiu do alcance da faca.",
+            ["No character."] = "Nenhum personagem.",
+            ["Nobody to teleport to."] = "Ninguém para teleportar.",
+            ["No coins found."] = "Nenhuma moeda encontrada.",
+            ["Could not find the lobby."] = "Não conseguiu encontrar o lobby.",
+            ["No map spawns available."] = "Nenhum spawn do mapa disponível.",
+            ["Give it a name first."] = "Dê um nome primeiro.",
+            ["No waypoint called "] = "Nenhum waypoint chamado ",
+            ["Waiting for roles…"] = "Aguardando papéis…",
+            ["Back to your own view."] = "Voltar à sua visão.",
+            ["No character to watch."] = "Nenhum personagem para assistir.",
+            ["Moved to the murderer."] = "Movido até o assassino.",
+            ["Moved to the sheriff."] = "Movido até o xerife.",
+            ["Moved to the dropped gun."] = "Movido até a arma caída.",
+            ["Moved to the nearest coin."] = "Movido até a moeda mais próxima.",
+            ["Moved to the lobby."] = "Movido até o lobby.",
+            ["Moved to a random spawn."] = "Movido até um spawn aleatório.",
+            ["Nuclear death"] = "Morte nuclear",
         },
         es = {
             ["Aimbot"] = "Aimbot", ["Targeting"] = "Objetivo",
@@ -7324,30 +7736,45 @@ do
             end
             Lang.code = "en"
             Lang.display = "English"
+            pcall(UI.refreshAll)
             return true
         end
 
         local unique, seen = {}, {}
         for _, e in ipairs(i18n) do
-            local s = e.original
-            if s and s ~= "" and not seen[s] then
-                seen[s] = true
-                unique[#unique + 1] = s
+            -- Entries with a `get` closure resolve themselves at apply time
+            -- (dropdown option labels); only static originals need translating.
+            if not e.get then
+                local s = e.original
+                if s and s ~= "" and not seen[s] then
+                    seen[s] = true
+                    unique[#unique + 1] = s
+                end
             end
         end
 
         local ok = fetch(code, unique)
 
         for _, e in ipairs(i18n) do
-            local t = Lang.cache[code][e.original or ""]
-            if t and t ~= "" then
-                pcall(function() e.obj[e.prop] = e.upper and t:upper() or t end)
+            -- Dynamic entries (dropdown option labels) translate their current
+            -- label on the fly via a `get` closure instead of a static mapping.
+            if e.get then
+                local t = e.get()
+                pcall(function() e.obj[e.prop] = t end)
+            else
+                local t = Lang.cache[code][e.original or ""]
+                if t and t ~= "" then
+                    pcall(function() e.obj[e.prop] = e.upper and t:upper() or t end)
+                end
             end
         end
 
         Lang.code = code
         Lang.display = CODENAME[code] or Lang.display
         Lang.saveCache(code)
+        -- Re-render controls (dropdowns/readouts) so their live current values
+        -- pick up the new language too, not just the tracked static text.
+        pcall(UI.refreshAll)
         return ok
     end
 
