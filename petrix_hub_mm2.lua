@@ -8,7 +8,7 @@
 --   ╚═╝  ╚═╝╚═╝   ╚═╝      ╚═╝      ╚═╝       ╚═╝  ╚═╝ ╚═════╝ ╚═════╝
 --
 --   Murder Mystery 2  ·  native Roblox UI, no Drawing API
---   build 3.1.0+4ad8818a  ·  2026-09-02 21:18 UTC
+--   build 3.1.0+2040767a  ·  2026-09-02 21:24 UTC
 --
 --   GENERATED FILE — do not edit directly.
 --   Sources live in src/mm2/ ; rebuild with `python build.py`.
@@ -1445,22 +1445,36 @@ do
         body.AutomaticSize = Enum.AutomaticSize.Y
         UI.pad(body, 0, 8, 8, 8, 8)
 
-        -- drag handle (mouse + touch) — the title label only, so the − / ✕
-        -- buttons always win the tap without starting a drag.
-        local dragging, dragStart, frameStart
+        -- drag handle (mouse + touch) — the TITLE label only, so the − / ✕ buttons
+        -- and every content control always win the tap without starting a drag.
+        -- We track the exact input being held and only move while THAT input is
+        -- still pressed, so interacting with toggles/sliders/dropdowns can never
+        -- drag the panel and a stale press can never leave it "glued" to a thumb.
+        local dragging, dragInput, dragStart, frameStart
         titleText.InputBegan:Connect(function(input, gpe)
             if gpe then return end
             if input.UserInputType == Enum.UserInputType.MouseButton1
                 or input.UserInputType == Enum.UserInputType.Touch then
+                if dragInput and dragInput ~= input then
+                    -- a different press came in → drop any previous drag
+                    dragging, dragInput = false, nil
+                    return
+                end
                 dragging = true
+                dragInput = input
                 dragStart = input.Position
                 frameStart = frame.Position
             end
         end)
         UserInputService.InputChanged:Connect(function(input, gpe)
-            if not dragging then return end
+            if not dragging or input ~= dragInput then return end
             if input.UserInputType ~= Enum.UserInputType.MouseMovement
                 and input.UserInputType ~= Enum.UserInputType.Touch then return end
+            -- bail if the held press is already over (robustness vs missed Ends)
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging, dragInput = false, nil
+                return
+            end
             local delta = input.Position - dragStart
             -- move anchors off so we can drag freely in offset space
             frame.AnchorPoint = Vector2.new(0, 0)
@@ -1473,9 +1487,10 @@ do
         end)
         UserInputService.InputEnded:Connect(function(input, gpe)
             if gpe then return end
+            if input ~= dragInput then return end
             if input.UserInputType == Enum.UserInputType.MouseButton1
                 or input.UserInputType == Enum.UserInputType.Touch then
-                dragging = false
+                dragging, dragInput = false, nil
             end
         end)
 
@@ -2609,22 +2624,33 @@ do
     openBtn.MouseEnter:Connect(function() tween(openBtn, 0.12, {Size = UDim2.fromOffset(122, 40)}) end)
     openBtn.MouseLeave:Connect(function() tween(openBtn, 0.12, {Size = UDim2.fromOffset(116, 38)}) end)
 
-    -- Dragging, from the top bar only.
+    -- Dragging, from the top bar only. Tracks the exact press so interacting with
+        -- the menu's controls can never drag it and a stale press can't stick.
     do
-        local dragging, dragStart, startPos
+        local dragging, dragInput, dragStart, startPos
         KH.track(TopBar.InputBegan:Connect(function(input)
             if input.UserInputType == Enum.UserInputType.MouseButton1
                 or input.UserInputType == Enum.UserInputType.Touch then
-                dragging, dragStart, startPos = true, input.Position, Root.Position
+                if dragInput and dragInput ~= input then
+                    dragging, dragInput = false, nil
+                    return
+                end
+                dragging, dragInput, dragStart, startPos = true, input, input.Position, Root.Position
                 input.Changed:Connect(function()
-                    if input.UserInputState == Enum.UserInputState.End then dragging = false end
+                    if input.UserInputState == Enum.UserInputState.End then
+                        if dragInput == input then dragging, dragInput = false, nil end
+                    end
                 end)
             end
         end))
         KH.track(UserInputService.InputChanged:Connect(function(input)
-            if not dragging then return end
+            if not dragging or input ~= dragInput then return end
             if input.UserInputType == Enum.UserInputType.MouseMovement
                 or input.UserInputType == Enum.UserInputType.Touch then
+                if input.UserInputState == Enum.UserInputState.End then
+                    dragging, dragInput = false, nil
+                    return
+                end
                 local delta = input.Position - dragStart
                 Root.Position = UDim2.new(
                     startPos.X.Scale, startPos.X.Offset + delta.X,
