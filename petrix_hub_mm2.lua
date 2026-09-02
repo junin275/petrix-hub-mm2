@@ -8,7 +8,7 @@
 --   ╚═╝  ╚═╝╚═╝   ╚═╝      ╚═╝      ╚═╝       ╚═╝  ╚═╝ ╚═════╝ ╚═════╝
 --
 --   Murder Mystery 2  ·  native Roblox UI, no Drawing API
---   build 3.1.0+47e24c32  ·  2026-09-02 21:33 UTC
+--   build 3.1.0+e507777c  ·  2026-09-02 21:39 UTC
 --
 --   GENERATED FILE — do not edit directly.
 --   Sources live in src/mm2/ ; rebuild with `python build.py`.
@@ -1262,6 +1262,31 @@ do
     end
     local tween = UI.tween
 
+    -- --------------------------------------------------------- pop-in
+    -- Smooth "landing" animation: fades the element in and drops it a few px
+    -- from above with a soft Back ease. Applies cleanly to any GuiObject.
+    function UI.popIn(gui, duration, endTransparency, lift)
+        if not gui or typeof(gui) ~= "Instance" then return end
+        local d = duration or 0.22
+        gui.Visible = true
+        local base = gui.Position
+        local drop = (lift or 8)
+        if base then
+            pcall(function()
+                gui.Position = UDim2.fromOffset(base.X.Offset, base.Y.Offset - drop)
+            end)
+        end
+        if gui:IsA("GuiObject") then
+            pcall(function() gui.Transparency = 1 end)
+        end
+        pcall(function() tween(gui, d, {Transparency = endTransparency or 0}, Enum.EasingStyle.Quad) end)
+        if base then
+            pcall(function()
+                tween(gui, d, {Position = UDim2.fromOffset(base.X.Offset, base.Y.Offset)}, Enum.EasingStyle.Back)
+            end)
+        end
+    end
+
     -- --------------------------------------------------------- accent theme
     -- Anything painted with the accent registers here so the colour picker in
     -- Settings can repaint the whole menu live.
@@ -1845,6 +1870,20 @@ do
     })
     UI.corner(Window, 12)
     UI.stroke(Window, C.Stroke, 1)
+    -- soft depth: a whisper of accent light bleeding in from the top-left edge
+    local winLite = make("UIGradient", {
+        Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(28, 30, 46)),
+            ColorSequenceKeypoint.new(0.5, C.Bg),
+            ColorSequenceKeypoint.new(1, C.Bg),
+        }),
+        Rotation = -8,
+        Transparency = NumberSequence.new(
+            NumberSequenceKeypoint.new(0, 0.75),
+            NumberSequenceKeypoint.new(1, 0)),
+        Parent = Window,
+    })
+    UI.WindowLite = winLite
     UI.Window = Window
 
     -- ------------------------------------------- resize grip (bottom-right)
@@ -2368,6 +2407,13 @@ do
         for tabName, entry in pairs(tabs) do
             local on = (tabName == name)
             entry.page.Visible = on
+            if on then
+                -- smooth content entrance when a tab is shown
+                pcall(function()
+                    entry.page.CanvasPosition = Vector2.new(0, 0)
+                    entry.page.ScrollingDirection = Enum.ScrollingDirection.Y
+                end)
+            end
             tween(entry.button, 0.14, {BackgroundTransparency = on and 0.86 or 1})
             tween(entry.label, 0.14, {TextColor3 = on and C.Text or C.TextDim})
             tween(entry.icon, 0.14, {TextTransparency = on and 0 or 0.35})
@@ -2478,6 +2524,28 @@ do
             Parent = card,
         })
         UI.trackText(titleLabel, "Text", titleText, true)
+
+        -- animated accent underline that sweeps under the section title
+        local titleAccent = make("Frame", {
+            Name = "SectionAccent",
+            Size = UDim2.new(0, 0, 0, 2),
+            Position = UDim2.new(0, 14, 0, 27),
+            BackgroundColor3 = C.Accent,
+            BackgroundTransparency = 0.3,
+            BorderSizePixel = 0,
+            Parent = card,
+        })
+        UI.corner(titleAccent, 1)
+        UI.accented(titleAccent, "BackgroundColor3")
+        local titleAccentHi = UDim2.new(1, -28, 0, 2)
+        titleLabel.MouseEnter:Connect(function()
+            tween(titleAccent, 0.22, {Size = titleAccentHi}, Enum.EasingStyle.Quad)
+            tween(titleAccent, 0.22, {BackgroundTransparency = 0.1}, Enum.EasingStyle.Quad)
+        end)
+        titleLabel.MouseLeave:Connect(function()
+            tween(titleAccent, 0.22, {Size = UDim2.new(0, 0, 0, 2)}, Enum.EasingStyle.Quad)
+            tween(titleAccent, 0.22, {BackgroundTransparency = 0.3}, Enum.EasingStyle.Quad)
+        end)
 
         local body = make("Frame", {
             BackgroundTransparency = 1,
@@ -2816,11 +2884,15 @@ do
             })
         end
 
-        tween(card, 0.26, {Position = UDim2.fromOffset(0, 0)}, Enum.EasingStyle.Quint)
+        -- animated entrance: slide in from the right while fading up
+        pcall(function() card.Transparency = 1 end)
+        card.Position = UDim2.fromOffset(40, 0)
+        tween(card, 0.05, {Position = UDim2.fromOffset(320, 0)}, Enum.EasingStyle.Quad)
+        tween(card, 0.28, {Position = UDim2.fromOffset(0, 0), Transparency = 0}, Enum.EasingStyle.Quint)
 
         task.delay(duration, function()
             if not slot.Parent then return end
-            tween(card, 0.2, {Position = UDim2.fromOffset(340, 0)})
+            tween(card, 0.2, {Position = UDim2.fromOffset(340, 6), Transparency = 1}, Enum.EasingStyle.Quad)
             task.delay(0.22, function() pcall(function() slot:Destroy() end) end)
         end)
         return card
