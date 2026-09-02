@@ -8,7 +8,7 @@
 --   ╚═╝  ╚═╝╚═╝   ╚═╝      ╚═╝      ╚═╝       ╚═╝  ╚═╝ ╚═════╝ ╚═════╝
 --
 --   Murder Mystery 2  ·  native Roblox UI, no Drawing API
---   build 3.1.0+5d0b31d3  ·  2026-09-02 14:52 UTC
+--   build 3.1.0+8019ceab  ·  2026-09-02 15:07 UTC
 --
 --   GENERATED FILE — do not edit directly.
 --   Sources live in src/mm2/ ; rebuild with `python build.py`.
@@ -196,7 +196,7 @@ do
             Target        = "Murderer",  -- Murderer | Nearest | Crosshair
             Mode          = "Hold",      -- Hold | Toggle | Always
             Key           = "C",
-            Prediction    = 2.8,         -- studs of lead per unit of velocity
+            Prediction    = 1.0,         -- studs of lead per unit of velocity
             PingComp      = true,        -- scale lead by measured ping
             FireRate      = 0.10,        -- seconds between shots
             KeepEquipped  = true,        -- re-draw the gun if it gets stowed
@@ -6638,7 +6638,11 @@ do
         if not char then return nil end
         local part = S.Aim.AimAtHead and char:FindFirstChild("Head") or U.torsoOf(char)
         if not part then return nil end
-        local pos, onScreen = U.toScreen(part.Position)
+        -- Match exactly what the camera swings to (the predicted point) so the
+        -- crosshair sits on the aim line instead of drifting off the body while
+        -- the reticle catches up on a moving target.
+        local aim = Comb and Comb.aimPoint and Comb.aimPoint(char, part) or part.Position
+        local pos, onScreen = U.toScreen(aim)
         if not onScreen then return nil end
         return pos
     end
@@ -6748,6 +6752,255 @@ do
     local Lang = { cache = {}, busy = false, code = "en" }
     KH.Lang = Lang
 
+    -- Offline dictionaries for the most useful languages. These cover the whole
+    -- interface, so translating into one of them is instant (no network round
+    -- trips) and never stalls the executor. Anything not in the dictionary falls
+    -- through to the online API below, then is cached on disk for next time.
+    local OFFLINE = {
+        pt = {
+            ["Aimbot"] = "Aimbot", ["Targeting"] = "Alvo",
+            ["Aimbot Enabled"] = "Aimbot Ativado",
+            ["Master switch for automatic firing."] = "Chave-mestra para o disparo automático.",
+            ["Target"] = "Alvo",
+            ["Nearest and Crosshair will shoot innocents too."] = "Nearby e Crosshair também atirarão em inocentes.",
+            ["Trigger"] = "Gatilho",
+            ["Hold the key, toggle it, or fire constantly."] = "Segure a tecla, alterne ou dispare constantemente.",
+            ["Aim Key"] = "Tecla do Aimbot",
+            ["Keep Gun Equipped"] = "Manter Arma Equipada",
+            ["Re-draw the gun if a respawn or round change stows it."] = "Re-equipa a arma se um respawn ou troca de rodada a guardar.",
+            ["Accuracy"] = "Precisão",
+            ["Prediction"] = "Previsão",
+            ["Studs of lead. Raise it if shots land behind a running target."] = "Estudantes de antecipação. Aumente se os tiros acertarem atrás de um alvo em movimento.",
+            ["Ping Compensation"] = "Compensação de Ping",
+            ["Scale the lead by your measured ping."] = "Dimensiona a antecipação pelo seu ping.",
+            ["Aim At Head"] = "Mirar na Cabeça",
+            ["Target the head instead of the torso."] = "Mira na cabeça em vez do tronco.",
+            ["Fire Rate"] = "Cadência de Tiro",
+            ["Visual Aim (FantiHub)"] = "Aim Visual (FantiHub)",
+            ["Visual Aim"] = "Aim Visual",
+            ["Swing the camera toward the locked target."] = "Gira a câmera em direção ao alvo travado.",
+            ["Only With Gun"] = "Só Com Arma",
+            ["Only aim-assist while you're holding the gun."] = "Só auxilia a mira enquanto você segura a arma.",
+            ["Prioritize Sheriff"] = "Priorizar Xerife",
+            ["As murderer, lock the sheriff even when an innocent is closer. As sheriff, lock the murderer. Falls back to the closest player otherwise."] = "Como assassino, trava o xerife mesmo se um inocente estiver mais perto. Como xerife, trava o assassino. Caso contrário, vai no jogador mais próximo.",
+            ["Lock FOV"] = "FOV de Trava",
+            ["Screen radius (from the crosshair) where it acquires and keeps a target."] = "Raio na tela (a partir da mira) onde ele adquire e mantém um alvo.",
+            ["Visual Speed"] = "Velocidade Visual",
+            ["How fast the camera chases the target. Low = smooth pull, high = instant snap."] = "Quão rápido a câmera persegue o alvo. Baixo = puxada suave, alto = corte instantâneo.",
+            ["Auto Shoot on Lock"] = "Atirar Automaticamente ao Travar",
+            ["Automatically fire at the locked target."] = "Dispara automaticamente no alvo travado.",
+            ["Show FOV Ring"] = "Mostrar Anel de FOV",
+            ["Draw the lock window circle on screen."] = "Desenha o círculo da janela de trava na tela.",
+            ["Extras"] = "Extras",
+            ["Silent Aim"] = "Aim Silencioso",
+            ["Notify On Shot"] = "Notificar Disparo",
+            ["Current Target"] = "Alvo Atual",
+            ["Kill All"] = "Matar Todos",
+            ["Fire at every living player in sequence."] = "Atira em cada jogador vivo em sequência.",
+            ["Teste Aimbot (todos)"] = "Teste Aimbot (todos)",
+            ["Gira a câmera por cada jogador vivo para conferir se o aimbot tá achando alvo."] = "Gira a câmera por cada jogador vivo para conferir se o aimbot está achando alvo.",
+            ["Mover Botões (Atalhos)"] = "Mover Botões (Atalhos)",
+            ["Ligue para arrastar os botões de atalho para a posição desejada na tela."] = "Ligue para arrastar os botões de atalho para a posição desejada na tela.",
+            ["Knife"] = "Faca",
+            ["Murderer Only"] = "Só Assassino",
+            ["Throwing"] = "Arremesso",
+            ["Auto Throw"] = "Arremesso Automático",
+            ["Throw at the closest valid target on a timer."] = "Arremessa no alvo válido mais próximo em um temporizador.",
+            ["Throw Delay"] = "Atraso do Arremesso",
+            ["Throw Now"] = "Arremessar Agora",
+            ["No knife or no target."] = "Sem faca ou sem alvo.",
+            ["Melee"] = "Corpo a Corpo",
+            ["Knife Aura"] = "Aura da Faca",
+            ["Stab anyone who walks into range."] = "Esfaqueia qualquer um que entrar no alcance.",
+            ["Aura Radius"] = "Raio da Aura",
+            ["Aura Delay"] = "Atraso da Aura",
+            ["Teleport Stab"] = "Teleportar e Esfaquear",
+            ["Blink to the target, swing, blink back."] = "Teleporta até o alvo, ataca e volta.",
+            ["Target Filter"] = "Filtro de Alvo",
+            ["Prioritise Sheriff"] = "Priorizar Xerife",
+            ["Go for whoever is holding the gun first."] = "Vai primeiro em quem estiver com a arma.",
+            ["Never Target Sheriff"] = "Nunca Mirar o Xerife",
+            ["Avoid the gun holder entirely."] = "Evita completamente quem está com a arma.",
+            ["ESP"] = "ESP",
+            ["Players"] = "Jogadores",
+            ["ESP Enabled"] = "ESP Ativado",
+            ["Boxes"] = "Caixas",
+            ["Box Style"] = "Estilo da Caixa",
+            ["Names"] = "Nomes",
+            ["Role Labels"] = "Rótulos de Papel",
+            ["Show Distance"] = "Mostrar Distância",
+            ["Health Bars"] = "Barras de Vida",
+            ["Tracers"] = "Linhas",
+            ["Tracer Origin"] = "Origem da Linha",
+            ["Chams"] = "Chams",
+            ["Fill characters with their role colour."] = "Pinta os personagens com a cor do papel.",
+            ["Cham Opacity"] = "Opacidade do Cham",
+            ["Off-Screen Arrows"] = "Setas Fora da Tela",
+            ["Edge markers pointing at players behind you."] = "Marcadores na borda apontando para os jogadores atrás de você.",
+            ["Hide Innocents"] = "Ocultar Inocentes",
+            ["Only draw the murderer, sheriff and hero."] = "Só desenha o assassino, o xerife e o herói.",
+            ["Max Distance"] = "Distância Máxima",
+            ["Text Size"] = "Tamanho do Texto",
+            ["World"] = "Mundo",
+            ["Coin ESP"] = "ESP de Moedas",
+            ["Gun Drop ESP"] = "ESP de Arma Caída",
+            ["Highlight the gun when a sheriff dies."] = "Destaca a arma quando um xerife morre.",
+            ["Trap ESP"] = "ESP de Armadilhas",
+            ["Reveal the murderer's traps."] = "Revela as armadilhas do assassino.",
+            ["Colours"] = "Cores",
+            ["Murderer"] = "Assassino",
+            ["Sheriff"] = "Xerife",
+            ["Hero"] = "Herói",
+            ["Innocent"] = "Inocente",
+            ["Farm"] = "Fazenda",
+            ["Coins"] = "Moedas",
+            ["Auto Coin Farm"] = "Fazenda de Moedas Automática",
+            ["Travel to every coin on the map and collect it."] = "Viaja até cada moeda do mapa e coleta.",
+            ["Travel Mode"] = "Modo de Viagem",
+            ["Teleport is fastest; Walk is the least obvious."] = "Teleporte é o mais rápido; Andar é o menos óbvio.",
+            ["Smooth Speed"] = "Velocidade Suave",
+            ["Teleport Delay"] = "Atraso do Teleporte",
+            ["Include Lobby"] = "Incluir Lobby",
+            ["Also collect the coins in the lobby between rounds."] = "Também coleta as moedas do lobby entre as rodadas.",
+            ["Coin Magnet"] = "Ímã de Moedas",
+            ["Magnet Radius"] = "Raio do Ímã",
+            ["Dropped Gun"] = "Arma Caída",
+            ["Auto Grab Gun"] = "Pegar Arma Automaticamente",
+            ["Rush the gun the moment a sheriff dies."] = "Vai atrás da arma assim que um xerife morre.",
+            ["Return After Grab"] = "Voltar Após Pegar",
+            ["Snap back to where you were standing."] = "Volta para onde você estava.",
+            ["Grab Gun Now"] = "Pegar Arma Agora",
+            ["Session"] = "Sessão",
+            ["Anti-AFK"] = "Anti-AFK",
+            ["Block the twenty-minute idle kick."] = "Bloqueia o chute de ociosidade de vinte minutos.",
+            ["Coins Collected"] = "Moedas Coletadas",
+            ["Shots Fired"] = "Tiros Disparados",
+            ["Safety"] = "Segurança",
+            ["Murderer Warning"] = "Alerta de Assassino",
+            ["Proximity Alert"] = "Alerta de Proximidade",
+            ["Warn when the murderer closes in."] = "Alerta quando o assassino se aproxima.",
+            ["Alert Distance"] = "Distância do Alerta",
+            ["Alert Beep"] = "Bipe de Alerta",
+            ["Beeps faster the closer they get."] = "Bipa mais rápido quanto mais perto eles chegam.",
+            ["Screen Edge Flash"] = "Borda da Tela Piscando",
+            ["Red vignette that intensifies with proximity."] = "Vinheta vermelha que intensifica com a proximidade.",
+            ["Murderer Distance"] = "Distância do Assassino",
+            ["Auto Dodge"] = "Esvair Automático",
+            ["Launch upward if the knife gets too close. Off while armed."] = "Pula para cima se a faca chegar muito perto. Desligado enquanto armado.",
+            ["Trigger Distance"] = "Distância do Gatilho",
+            ["Dodge Height"] = "Altura do Esvaive",
+            ["Announcements"] = "Anúncios",
+            ["Role Reveal"] = "Revelar Papéis",
+            ["Name the murderer and sheriff the moment roles are dealt."] = "Nomeia o assassino e o xerife no momento em que os papéis são distribuídos.",
+            ["Movement"] = "Movimento",
+            ["Speed & Jump"] = "Velocidade & Pulo",
+            ["Speed Hack"] = "Hack de Velocidade",
+            ["Walk Speed"] = "Velocidade de Andar",
+            ["Speed Mode"] = "Modo de Velocidade",
+            ["CFrame ignores server speed clamps but looks less natural."] = "CFrame ignora os limites de velocidade do servidor, mas parece menos natural.",
+            ["Jump Hack"] = "Hack de Pulo",
+            ["Jump Power"] = "Força do Pulo",
+            ["Infinite Jump"] = "Pulo Infinito",
+            ["Bunny Hop"] = "Bunny Hop",
+            ["Auto-jump while holding space."] = "Pula automaticamente enquanto segura espaço.",
+            ["Noclip & Fly"] = "Noclip & Fly",
+            ["Noclip"] = "Noclip",
+            ["Noclip Key"] = "Tecla do Noclip",
+            ["Fly"] = "Fly",
+            ["WASD to move, Space up, Left Shift down."] = "WASD para mover, Espaço para cima, Shift Esquerdo para baixo.",
+            ["Fly Key"] = "Tecla do Fly",
+            ["Fly Speed"] = "Velocidade do Fly",
+            ["Spinbot"] = "Spinbot",
+            ["Constantly rotate your character."] = "Roda seu personagem constantemente.",
+            ["Teleport"] = "Teleporte",
+            ["To Murderer"] = "Até o Assassino",
+            ["To Sheriff"] = "Até o Xerife",
+            ["To Dropped Gun"] = "Até a Arma Caída",
+            ["To Nearest Coin"] = "Até a Moeda Mais Próxima",
+            ["To Lobby"] = "Até o Lobby",
+            ["To Random Spawn"] = "Até um Spawn Aleatório",
+            ["Waypoints"] = "Waypoints",
+            ["Waypoint Name"] = "Nome do Waypoint",
+            ["Save Current Position"] = "Salvar Posição Atual",
+            ["Saved Waypoints"] = "Waypoints Salvos",
+            ["Teleport To Waypoint"] = "Teleportar para Waypoint",
+            ["Delete Waypoint"] = "Excluir Waypoint",
+            ["Visuals"] = "Visuais",
+            ["Lighting"] = "Iluminação",
+            ["Fullbright"] = "Fullbright",
+            ["Flatten the lighting so nowhere is dark."] = "Parece a iluminação para que nenhum lugar fique escuro.",
+            ["Brightness"] = "Brilho",
+            ["Remove Fog"] = "Remover Névoa",
+            ["Camera"] = "Câmera",
+            ["Custom Field Of View"] = "Campo de Visão Personalizado",
+            ["Field Of View"] = "Campo de Visão",
+            ["X-Ray Walls"] = "Paredes Raio-X",
+            ["Make the map semi-transparent. Players stay solid."] = "Deixa o mapa semitransparente. Os jogadores continuam sólidos.",
+            ["Wall Transparency"] = "Transparência das Paredes",
+            ["Low Detail Mode"] = "Modo de Baixos Detalhes",
+            ["Disable particles, trails and shadows for more frames."] = "Desativa partículas, rastros e sombras para mais quadros.",
+            ["In This Server"] = "Neste Servidor",
+            ["Back to your own view."] = "Voltar à sua visão.",
+            ["No character to watch."] = "Nenhum personagem para assistir.",
+            ["Watching "] = "Assistindo ",
+            ["Settings"] = "Configurações",
+            ["Interface"] = "Interface",
+            ["Menu Key"] = "Tecla do Menu",
+            ["Accent Colour"] = "Cor de Destaque",
+            ["Watermark"] = "Marca d'água",
+            ["Keybind List"] = "Lista de Atalhos",
+            ["Notifications"] = "Notificações",
+            ["Language"] = "Idioma",
+            ["Type a language and the whole UI is retranslated via an online API."] = "Digite um idioma e toda a interface é retraduzida." ,
+            ["Unknown language. Try \"pt\", \"es\", \"ja\"…"] = "Idioma desconhecido. Tente \"pt\", \"es\", \"ja\"…",
+            ["Configuration"] = "Configuração",
+            ["Auto Save"] = "Salvar Automaticamente",
+            ["Write the active profile whenever something changes."] = "Salva o perfil ativo sempre que algo mudar.",
+            ["Profile Name"] = "Nome do Perfil",
+            ["Save Profile"] = "Salvar Perfil",
+            ["Saved Profiles"] = "Perfis Salvos",
+            ["Load Profile"] = "Carregar Perfil",
+            ["Delete Profile"] = "Excluir Perfil",
+            ["Deleted."] = "Excluído.",
+            ["Reset To Defaults"] = "Redefinir Padrões",
+            ["Settings reset."] = "Configurações redefinidas.",
+            ["Executor"] = "Executor",
+            ["Silent Aim Support"] = "Suporte ao Aim Silencioso",
+            ["Rejoin Server"] = "Reentrar no Servidor",
+            ["Server Hop"] = "Pular de Servidor",
+            ["Find a different public server for this place."] = "Encontra um servidor público diferente para este lugar.",
+            ["Unload Petrix Hub"] = "Descarregar Petrix Hub",
+            ["Remove the menu and undo every change."] = "Remove o menu e desfaz todas as alterações.",
+        },
+        es = {
+            ["Aimbot"] = "Aimbot", ["Targeting"] = "Objetivo",
+            ["Aimbot Enabled"] = "Aimbot Activado",
+            ["Prediction"] = "Predicción",
+            ["Accuracy"] = "Precisión",
+            ["Aim At Head"] = "Apuntar a la Cabeza",
+            ["Visual Aim"] = "Apunter Visual",
+            ["Silent Aim"] = "Aimer Silencioso",
+            ["Knife"] = "Cuchillo",
+            ["Murderer Only"] = "Solo Asesino",
+            ["ESP"] = "ESP",
+            ["Players"] = "Jugadores",
+            ["Settings"] = "Configuración",
+            ["Interface"] = "Interfaz",
+            ["Language"] = "Idioma",
+            ["Movement"] = "Movimiento",
+            ["Teleport"] = "Teleporte",
+            ["Visuals"] = "Visuales",
+            ["Murderer"] = "Asesino",
+            ["Sheriff"] = "Sheriff",
+            ["Hero"] = "Héroe",
+            ["Innocent"] = "Inocente",
+            ["Coins"] = "Monedas",
+            ["Farm"] = "Granja",
+            ["Safety"] = "Seguridad",
+            ["Session"] = "Sesión",
+        },
+    }
+
     local function codeOf(name)
         if type(name) ~= "string" then return nil end
         local key = string.lower(name):gsub("^%s+", ""):gsub("%s+$", "")
@@ -6792,7 +7045,9 @@ do
 
     -- --------------------------------------------------------------- fetch
     local function GET(url)
-        local ok, body = pcall(function() return game:HttpGet(url) end)
+        -- VoiceRoblox's game:HttpGet accepts (url, nocache, timeout) — the
+        -- timeout keeps a stalled connection from hanging the executor.
+        local ok, body = pcall(function() return game:HttpGet(url, true, 6) end)
         if not ok or type(body) ~= "string" then return nil end
         return body
     end
@@ -6819,7 +7074,16 @@ do
 
         local todo = {}
         for _, s in ipairs(strings) do
-            if not map[s] then todo[#todo + 1] = s end
+            if not map[s] then
+                -- Offline dictionary wins when it has the string: instant, no
+                -- network, no lag. Everything else still goes to the API.
+                local offline = OFFLINE[code] and OFFLINE[code][s]
+                if offline and offline ~= "" then
+                    map[s] = offline
+                else
+                    todo[#todo + 1] = s
+                end
+            end
         end
         if #todo == 0 then return true end
 
