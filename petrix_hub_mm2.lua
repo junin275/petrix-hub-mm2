@@ -8,7 +8,7 @@
 --   ╚═╝  ╚═╝╚═╝   ╚═╝      ╚═╝      ╚═╝       ╚═╝  ╚═╝ ╚═════╝ ╚═════╝
 --
 --   Murder Mystery 2  ·  native Roblox UI, no Drawing API
---   build 3.1.0+aec2759b  ·  2026-09-02 15:36 UTC
+--   build 3.1.0+52a57e25  ·  2026-09-02 15:54 UTC
 --
 --   GENERATED FILE — do not edit directly.
 --   Sources live in src/mm2/ ; rebuild with `python build.py`.
@@ -3813,7 +3813,12 @@ do
         local cam = KH.camera()
         if not cam then return false end
 
-        local goal = CFrame.lookAt(cam.CFrame.Position, Combat.aimPoint(char, part))
+        -- Aim the camera at the *real* body part so the reticle sits precisely
+        -- on the target. Prediction (aimPoint) only skews the shot for server-side
+        -- hit registration; using it here as well drags the crosshair off the
+        -- body on a moving target, which reads as "imprecise". The actual shot
+        -- still applies prediction via fireLocked/fireOnce.
+        local goal = CFrame.lookAt(cam.CFrame.Position, part.Position)
         local damp = 1 - math.exp(-(dt or 0.016) * (S.Aim.VisualSpeed or 10))
         if not turnSmooth then
             turnSmooth = goal
@@ -5830,6 +5835,19 @@ do
             callback = function() KH.rejoin() end,
         })
         UI.button(session, {
+            text = "Reload Script",
+            desc = "Re-apply the selected language and rebuild all controls without re-injecting.",
+            callback = function()
+                UI.refreshAll()
+                local Lang = KH.Lang
+                if Lang and Lang.display and Lang.display ~= "" then
+                    local code = Lang.nameToCode(Lang.display)
+                    if code == "en" then Lang.reset() elseif code then Lang.apply(code) end
+                end
+                UI.notify({title = "Reload", text = "Menu & language re-applied.", kind = "good", duration = 2})
+            end,
+        })
+        UI.button(session, {
             text = "Server Hop",
             desc = "Find a different public server for this place.",
             callback = function() KH.serverHop() end,
@@ -6642,11 +6660,9 @@ do
         if not char then return nil end
         local part = S.Aim.AimAtHead and char:FindFirstChild("Head") or U.torsoOf(char)
         if not part then return nil end
-        -- Match exactly what the camera swings to (the predicted point) so the
-        -- crosshair sits on the aim line instead of drifting off the body while
-        -- the reticle catches up on a moving target.
-        local aim = Comb and Comb.aimPoint and Comb.aimPoint(char, part) or part.Position
-        local pos, onScreen = U.toScreen(aim)
+        -- Match exactly what the camera swings to (the real part position) so
+        -- the crosshair and the reticle coincide on the body.
+        local pos, onScreen = U.toScreen(part.Position)
         if not onScreen then return nil end
         return pos
     end
