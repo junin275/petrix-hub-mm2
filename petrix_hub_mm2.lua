@@ -8,7 +8,7 @@
 --   ╚═╝  ╚═╝╚═╝   ╚═╝      ╚═╝      ╚═╝       ╚═╝  ╚═╝ ╚═════╝ ╚═════╝
 --
 --   Murder Mystery 2  ·  native Roblox UI, no Drawing API
---   build 3.1.0+dcf8f260  ·  2026-09-02 21:49 UTC
+--   build 3.1.0+f2b960e4  ·  2026-09-02 22:08 UTC
 --
 --   GENERATED FILE — do not edit directly.
 --   Sources live in src/mm2/ ; rebuild with `python build.py`.
@@ -281,6 +281,13 @@ do
             FlyKey        = "F",
             FlySpeed      = 70,
             Spinbot       = false,
+        },
+        Nav = {
+            Enabled       = false,
+            ShowVisuals   = true,
+            Debug         = false,
+            AutoRebuild   = true,
+            CellSize      = 3,
         },
         Visual = {
             Fullbright    = false,
@@ -6199,7 +6206,60 @@ do
             callback = function()
                 if Move.deleteWaypoint(selected.value) then
                     selected.value = ""
-                    refreshWaypoints()
+refreshWaypoints()
+
+        -- ---------------------------------------------------------- NAVIGATION TAB
+        do
+            local tab = UI.addTab("Navigation", "🧭")
+
+            local navSec = UI.section(tab, "NavMesh")
+            UI.toggle(navSec, {
+                text = "Enable NavMesh",
+                config = {"Nav", "Enabled"},
+                callback = function(v) KH.Nav.toggle(v) end,
+            })
+            UI.toggle(navSec, {
+                text = "Show Route Visuals",
+                config = {"Nav", "ShowVisuals"},
+                callback = function(v) KH.Nav.setVisuals(v) end,
+            })
+            UI.button(navSec, {
+                text = "Rebuild NavMesh Now",
+                callback = function()
+                    KH.Nav.rebuild()
+                    UI.notify({title = "NavMesh", text = "Manual rebuild triggered.", kind = "info"})
+                end,
+            })
+            UI.dropdown(navSec, {
+                text = "Cell Size (studs)",
+                options = {"2", "3", "4", "5"},
+                get = function() return tostring(KH.Nav.CellSize or 3) end,
+                set = function(v) KH.Nav.CellSize = tonumber(v); KH.Nav.rebuild() end,
+            })
+
+            local targets = UI.section(tab, "Quick Targets")
+            UI.button(targets, {text = "Gun Drop", callback = function()
+                local drop = KH.Game.GunDrop
+                if drop then KH.Nav.setTarget(drop.Position) else UI.notify({title="Nav", text="No gun dropped.", kind="warn"}) end
+            end})
+            UI.button(targets, {text = "Nearest Coin", callback = function()
+                local coin = KH.Game.nearestCoin()
+                if coin then KH.Nav.setTarget(coin.part.Position) else UI.notify({title="Nav", text="No coins.", kind="warn"}) end
+            end})
+            UI.button(targets, {text = "Murderer", callback = function()
+                local m = KH.Game.murderer()
+                if m and m.Character then KH.Nav.setTarget(m.Character:GetPivot().Position) else UI.notify({title="Nav", text="No murderer.", kind="warn"}) end
+            end})
+            UI.button(targets, {text = "Sheriff", callback = function()
+                local s = KH.Game.sheriff()
+                if s and s.Character then KH.Nav.setTarget(s.Character:GetPivot().Position) else UI.notify({title="Nav", text="No sheriff.", kind="warn"}) end
+            end})
+            UI.button(targets, {text = "Lobby Spawn", callback = function()
+                local pos = (KH.Game.lobby() and KH.Game.lobby():FindFirstChild("Spawns") and KH.Game.lobby().Spawns:GetChildren()[1]) and KH.Game.lobby().Spawns:GetChildren()[1].Position
+                if pos then KH.Nav.setTarget(pos) else UI.notify({title="Nav", text="No lobby spawn.", kind="warn"}) end
+            end})
+            UI.button(targets, {text = "Clear Route", callback = function() KH.Nav.clear() end, kind = "danger"})
+        end
                 end
             end,
         })
@@ -8163,4 +8223,400 @@ do
         end)
     end
     task.delay(0.5, tryReapply)
+end
+
+-- ─── src/mm2/18_navmesh.lua ────────────────────────────────────────────
+
+-- ============================================================================
+--  NAVMESH + A* — grid-based pathfinding on the current map with live route
+--  rendering on the floor. Rebuilds when map/round changes.
+-- ============================================================================
+
+do
+    local UI          = KH.UI
+    local U           = KH.U
+    local Game        = KH.Game
+    local S           = KH.S
+    local X           = KH.X
+    local RunService  = KH.Services.RunService
+    local Workspace   = KH.Services.Workspace
+    local PathfindingService = game:GetService("PathfindingService")
+
+    local Nav = {}
+    KH.Nav = Nav
+
+    -- ------------------------------------------------------------ config
+    local function cellSize()
+        return (KH.S and KH.S.Nav and KH.S.Nav.CellSize) or 3
+    end
+    local AGENT_RADIUS = 2.5     -- character radius for clearance
+    local AGENT_HEIGHT = 5.5
+    local MAX_COST    = 1e9
+    local REBUILD_CD  = 3        -- seconds between full rebuilds
+
+    -- ------------------------------------------------------------ state
+    Nav.enabled       = false
+    Nav.grid          = nil      -- [z][x] = {walkable=true, cost=1, ...}
+    Nav.origin        = nil      -- Vector3 world position of grid[0][0]
+    Nav.sizeX, Nav.sizeZ = 0, 0
+    Nav.lastRebuild   = 0
+    Nav.route         = nil      -- current A* path (array of Vector3)
+    Nav.routeTarget   = nil
+    Nav.visualParts   = {}       -- rendered line parts
+    Nav.dirty         = true
+    Nav.showVisuals   = true
+
+    -- ------------------------------------------------------------ helpers
+    local function worldToGrid(pos)
+        if not Nav.origin then return nil end
+        local rel = pos - Nav.origin
+        local cs = cellSize()
+        local gx = math.floor(rel.X / cs + 0.5)
+        local gz = math.floor(rel.Z / cs + 0.5)
+        return gx, gz
+    end
+
+    local function gridToWorld(gx, gz)
+        if not Nav.origin then return nil end
+        local cs = cellSize()
+        return Nav.origin + Vector3.new((gx + 0.5) * cs, 0, (gz + 0.5) * cs)
+    end
+
+    local function inBounds(gx, gz)
+        return gx >= 0 and gx < Nav.sizeX and gz >= 0 and gz < Nav.sizeZ
+    end
+
+    local function isWalkable(gx, gz)
+        if not inBounds(gx, gz) then return false end
+        local cell = Nav.grid[gz] and Nav.grid[gz][gx]
+        return cell and cell.walkable
+    end
+
+    -- ------------------------------------------------------------ grid building
+    local function collectObstacles(mapModel)
+        local obstacles = {}
+        if not mapModel then return obstacles end
+        for _, obj in ipairs(mapModel:GetDescendants()) do
+            if obj:IsA("BasePart") and obj.CanCollide and obj.Transparency < 1 then
+                local cf, sz = obj.CFrame, obj.Size
+                table.insert(obstacles, {cf = cf, size = sz})
+            end
+        end
+        return obstacles
+    end
+
+    local function pointInOBB(point, obb)
+        local rel = obb.cf:PointToObjectSpace(point)
+        return math.abs(rel.X) <= obb.size.X/2
+           and math.abs(rel.Y) <= obb.size.Y/2
+           and math.abs(rel.Z) <= obb.size.Z/2
+    end
+
+    function Nav.rebuild()
+        local now = tick()
+        if now - Nav.lastRebuild < REBUILD_CD then return end
+        Nav.lastRebuild = now
+
+        local map = Game.map()
+        if not map then
+            Nav.grid = nil
+            return
+        end
+
+        -- find bounding box of map
+        local minX, minZ, maxX, maxZ = math.huge, math.huge, -math.huge, -math.huge
+        local hasBounds = false
+        for _, obj in ipairs(map:GetDescendants()) do
+            if obj:IsA("BasePart") then
+                hasBounds = true
+                local cf, sz = obj.CFrame, obj.Size
+                local corners = {
+                    cf * Vector3.new( sz.X/2, 0,  sz.Z/2),
+                    cf * Vector3.new(-sz.X/2, 0,  sz.Z/2),
+                    cf * Vector3.new( sz.X/2, 0, -sz.Z/2),
+                    cf * Vector3.new(-sz.X/2, 0, -sz.Z/2),
+                }
+                for _, c in ipairs(corners) do
+                    minX = math.min(minX, c.X)
+                    minZ = math.min(minZ, c.Z)
+                    maxX = math.max(maxX, c.X)
+                    maxZ = math.max(maxZ, c.Z)
+                end
+            end
+        end
+        if not hasBounds then
+            Nav.grid = nil
+            return
+        end
+
+        -- add margin
+        local margin = 10
+        minX, minZ = minX - margin, minZ - margin
+        maxX, maxZ = maxX + margin, maxZ + margin
+
+        local cs = cellSize()
+        Nav.sizeX = math.ceil((maxX - minX) / cs)
+        Nav.sizeZ = math.ceil((maxZ - minZ) / cs)
+        Nav.origin = Vector3.new(minX, 0, minZ)
+
+        -- collect obstacles once
+        local obstacles = collectObstacles(map)
+
+        -- build grid
+        local grid = {}
+        for gz = 0, Nav.sizeZ - 1 do
+            grid[gz] = {}
+            for gx = 0, Nav.sizeX - 1 do
+                local wp = gridToWorld(gx, gz)
+                local blocked = false
+                -- raycast down to find floor
+                local rayParams = RaycastParams.new()
+                rayParams.FilterDescendantsInstances = {map}
+                rayParams.FilterType = Enum.RaycastFilterType.Include
+                local hit = Workspace:Raycast(wp + Vector3.new(0, 50, 0), Vector3.new(0, -100, 0), rayParams)
+                local hasFloor = hit and hit.Position.Y > wp.Y - 10
+                -- check obstacles (OBB)
+                if hasFloor then
+                    for _, obb in ipairs(obstacles) do
+                        local test = wp + Vector3.new(0, obb.size.Y/2 + 1, 0)
+                        if pointInOBB(test, obb) then
+                            blocked = true
+                            break
+                        end
+                    end
+                else
+                    blocked = true
+                end
+                grid[gz][gx] = {walkable = not blocked, cost = blocked and MAX_COST or 1}
+            end
+        end
+
+        Nav.grid = grid
+        Nav.dirty = false
+        if S.Nav.Debug then
+            UI.notify({title = "NavMesh", text = ("Rebuilt %dx%d grid"):format(Nav.sizeX, Nav.sizeZ), kind = "info"})
+        end
+    end
+
+    -- ------------------------------------------------------------ A* pathfinding
+    local function heuristic(gx, gz, tx, tz)
+        return math.abs(gx - tx) + math.abs(gz - tz) -- Manhattan
+    end
+
+    function Nav.findPath(startPos, targetPos)
+        if not Nav.grid then Nav.rebuild() end
+        if not Nav.grid then return nil end
+
+        local sx, sz = worldToGrid(startPos)
+        local tx, tz = worldToGrid(targetPos)
+        if not (sx and tx) then return nil end
+        if not (isWalkable(sx, sz) and isWalkable(tx, tz)) then return nil end
+
+        -- open/closed sets
+        local open = {}
+        local openSet = {}
+        local closed = {}
+        local gScore = {}
+        local fScore = {}
+        local cameFrom = {}
+
+        local function push(gx, gz, g, f)
+            table.insert(open, {x = gx, z = gz, f = f})
+            openSet[gz * Nav.sizeX + gx] = true
+        end
+
+        local function pop()
+            local best, idx = math.huge, nil
+            for i, n in ipairs(open) do
+                if n.f < best then best, idx = n.f, i end
+            end
+            if idx then
+                local n = table.remove(open, idx)
+                openSet[n.z * Nav.sizeX + n.x] = nil
+                return n
+            end
+        end
+
+        gScore[sz * Nav.sizeX + sx] = 0
+        fScore[sz * Nav.sizeX + sx] = heuristic(sx, sz, tx, tz)
+        push(sx, sz, 0, fScore[sz * Nav.sizeX + sx])
+
+        while #open > 0 do
+            local cur = pop()
+            if not cur then break end
+            local cx, cz = cur.x, cur.z
+            if cx == tx and cz == tz then
+                -- reconstruct path
+                local path = {}
+                local key = cz * Nav.sizeX + cx
+                while cameFrom[key] do
+                    table.insert(path, 1, gridToWorld(cx, cz))
+                    cx, cz = cameFrom[key].x, cameFrom[key].z
+                    key = cz * Nav.sizeX + cx
+                end
+                table.insert(path, 1, gridToWorld(cx, cz))
+                return path
+            end
+            closed[cz * Nav.sizeX + cx] = true
+
+            -- 4-neighbor
+            for _, dir in ipairs({{1,0},{-1,0},{0,1},{0,-1}}) do
+                local nx, nz = cx + dir[1], cz + dir[2]
+                if inBounds(nx, nz) and isWalkable(nx, nz) then
+                    local nKey = nz * Nav.sizeX + nx
+                    if not closed[nKey] then
+                        local tentativeG = (gScore[cz * Nav.sizeX + cx] or MAX_COST) + 1
+                        if tentativeG < (gScore[nKey] or MAX_COST) then
+                            cameFrom[nKey] = {x = cx, z = cz}
+                            gScore[nKey] = tentativeG
+                            local f = tentativeG + heuristic(nx, nz, tx, tz)
+                            fScore[nKey] = f
+                            if not openSet[nKey] then
+                                push(nx, nz, tentativeG, f)
+                            end
+                        end
+                    end
+                end
+            end
+        end
+        return nil -- no path
+    end
+
+    -- ------------------------------------------------------------ route rendering
+    local function clearVisuals()
+        for _, p in ipairs(Nav.visualParts) do p:Destroy() end
+        Nav.visualParts = {}
+    end
+
+    function Nav.renderRoute(path)
+        clearVisuals()
+        if not path or #path < 2 then return end
+        if not Nav.showVisuals then return end
+
+        local folder = Instance.new("Folder")
+        folder.Name = "NavRoute"
+        folder.Parent = Workspace
+
+        for i = 1, #path - 1 do
+            local a, b = path[i], path[i + 1]
+            local dist = (b - a).Magnitude
+            if dist > 0.5 then
+                local part = Instance.new("Part")
+                part.Name = "RouteSeg"
+                part.Anchored = true
+                part.CanCollide = false
+                part.CanTouch = false
+                part.CanQuery = false
+                part.Massless = true
+                part.Transparency = 0.15
+                part.Color = Color3.fromRGB(70, 220, 120)
+                part.Material = Enum.Material.Neon
+                part.Size = Vector3.new(0.35, 0.15, dist)
+                part.CFrame = CFrame.lookAt((a + b) / 2 + Vector3.new(0, 0.2, 0), b + Vector3.new(0, 0.2, 0))
+                part.Parent = folder
+                table.insert(Nav.visualParts, part)
+            end
+            -- waypoint marker at each node
+            local marker = Instance.new("Part")
+            marker.Name = "RouteNode"
+            marker.Anchored = true
+            marker.CanCollide = false
+            marker.CanTouch = false
+            marker.CanQuery = false
+            marker.Massless = true
+            marker.Shape = Enum.PartType.Ball
+            marker.Size = Vector3.new(0.55, 0.55, 0.55)
+            marker.Color = Color3.fromRGB(70, 220, 120)
+            marker.Material = Enum.Material.Neon
+            marker.Transparency = 0.1
+            marker.CFrame = CFrame.new(a + Vector3.new(0, 0.5, 0))
+            marker.Parent = folder
+            table.insert(Nav.visualParts, marker)
+        end
+        -- final target marker
+        local last = path[#path]
+        local targetMark = Instance.new("Part")
+        targetMark.Name = "RouteTarget"
+        targetMark.Anchored = true
+        targetMark.CanCollide = false
+        targetMark.CanTouch = false
+        targetMark.CanQuery = false
+        targetMark.Massless = true
+        targetMark.Shape = Enum.PartType.Cylinder
+        targetMark.Size = Vector3.new(0.2, 2.2, 2.2)
+        targetMark.Color = Color3.fromRGB(255, 70, 160)
+        targetMark.Material = Enum.Material.Neon
+        targetMark.Transparency = 0.1
+        targetMark.CFrame = CFrame.new(last + Vector3.new(0, 1.2, 0)) * CFrame.Angles(math.rad(90), 0, 0)
+        targetMark.Parent = folder
+        table.insert(Nav.visualParts, targetMark)
+
+        -- subtle pulse on target
+        task.spawn(function()
+            while targetMark.Parent do
+                for t = 0, 1, 0.02 do
+                    targetMark.Transparency = 0.1 + 0.35 * math.sin(math.pi * t)
+                    task.wait(0.03)
+                end
+            end
+        end)
+    end
+
+    -- ------------------------------------------------------------ public API
+    function Nav.setTarget(pos)
+        if not pos then
+            Nav.route, Nav.routeTarget = nil, nil
+            clearVisuals()
+            return
+        end
+        local root = U.myRoot()
+        if not root then return end
+        Nav.routeTarget = pos
+        local path = Nav.findPath(root.Position, pos)
+        Nav.route = path
+        Nav.renderRoute(path)
+    end
+
+    function Nav.clear()
+        Nav.route, Nav.routeTarget = nil, nil
+        clearVisuals()
+    end
+
+    function Nav.toggle(enabled)
+        Nav.enabled = enabled
+        if not enabled then Nav.clear() end
+    end
+
+    function Nav.setVisuals(on)
+        Nav.showVisuals = on
+        if not on then clearVisuals() elseif Nav.route then Nav.renderRoute(Nav.route) end
+    end
+
+    -- ------------------------------------------------------------ live update
+    KH.onFrame("nav-route", function()
+        if not (Nav.enabled and Nav.route and Nav.routeTarget) then return end
+        local root = U.myRoot()
+        if not root then return end
+        -- recompute if we've drifted far from the path or target moved
+        local distToTarget = (root.Position - Nav.routeTarget).Magnitude
+        if distToTarget < 3 then
+            Nav.clear()
+            UI.notify({title = "Nav", text = "Destination reached.", kind = "good"})
+        elseif Nav.dirty or tick() % 2 < 0.02 then
+            Nav.rebuild()
+            if Nav.grid then
+                local newPath = Nav.findPath(root.Position, Nav.routeTarget)
+                if newPath then
+                    Nav.route = newPath
+                    Nav.renderRoute(newPath)
+                end
+            end
+        end
+    end, 10)
+
+    -- auto rebuild on map change
+    Game.on("MapChanged", function()
+        Nav.dirty = true
+    end)
+
 end
