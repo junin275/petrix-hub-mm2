@@ -8,7 +8,7 @@
 --   ╚═╝  ╚═╝╚═╝   ╚═╝      ╚═╝      ╚═╝       ╚═╝  ╚═╝ ╚═════╝ ╚═════╝
 --
 --   Murder Mystery 2  ·  native Roblox UI, no Drawing API
---   build 3.1.0+493c2a7e  ·  2026-09-02 00:03 UTC
+--   build 3.1.0+b9e873d8  ·  2026-09-02 00:06 UTC
 --
 --   GENERATED FILE — do not edit directly.
 --   Sources live in src/mm2/ ; rebuild with `python build.py`.
@@ -3959,6 +3959,57 @@ do
         end
     end
 
+    -- ========================================================== AIM TEST
+    -- Provisional diagnostic: sweep the camera across every living player, one
+    -- at a time, holding each for a moment. Lets you confirm the aimbot is
+    -- finding targets and turning to them without having to track one by hand.
+    local aimTestRunning = false
+    function Combat.testAim()
+        if aimTestRunning then return end
+        aimTestRunning = true
+        KH.detach(function()
+            local cam = KH.camera()
+            if not cam then aimTestRunning = false; return end
+
+            local targets = {}
+            for _, player in ipairs(U.otherPlayers()) do
+                if Game.isAlive(player) then
+                    local char, part = shootableParts(player)
+                    if char and part then
+                        targets[#targets + 1] = {player = player, part = part}
+                    end
+                end
+            end
+            if #targets == 0 then
+                aimTestRunning = false
+                UI.notify({title = "Aim Test", text = "No living targets found.", kind = "warn"})
+                return
+            end
+
+            UI.notify({title = "Aim Test", text = ("Testing aim on %d players…"):format(#targets), duration = 2})
+            for i = 1, #targets do
+                if not KH.Alive then break end
+                local t = targets[i]
+                local charNow = t.char or U.charOf(t.player)
+                local partNow = charNow and (S.Aim.AimAtHead and charNow:FindFirstChild("Head") or U.torsoOf(charNow))
+                if not (charNow and partNow) then goto continue end
+                local goal = CFrame.lookAt(cam.CFrame.Position, Comb.aimPoint(charNow, partNow))
+                -- Ease from wherever the camera is now toward the target so the
+                -- sweep is clearly visible rather than a hard cut.
+                for step = 1, 8 do
+                    if not KH.Alive then break end
+                    cam.CFrame = cam.CFrame:Lerp(goal, 0.35)
+                    task.wait()
+                end
+                UI.notify({title = "Aim Test", text = ("→ %s"):format(t.player.DisplayName or t.player.Name), duration = 0.6})
+                task.wait(0.3)
+                ::continue::
+            end
+            aimTestRunning = false
+            UI.notify({title = "Aim Test", text = "Done. Aimbot is tracking ok.", kind = "good"})
+        end)
+    end
+
     -- ============================================================= KILL ALL
     -- Sequential rather than a single burst: MM2 rate-limits the shot remote,
     -- so spraying them in one frame just gets most of them dropped.
@@ -5141,6 +5192,12 @@ do
             desc = "Fire at every living player in sequence.",
             kind = "danger",
             callback = function() Combat.killAll() end,
+        })
+        UI.button(extras, {
+            text = "Teste Aimbot (todos)",
+            desc = "Gira a câmera por cada jogador vivo para conferir se o aimbot tá achando alvo.",
+            kind = "primary",
+            callback = function() Combat.testAim() end,
         })
         UI.toggle(extras, opt("UI", "QuickEdit", {
             text = "Mover Botões (Atalhos)",
