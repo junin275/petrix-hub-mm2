@@ -8,7 +8,7 @@
 --   ╚═╝  ╚═╝╚═╝   ╚═╝      ╚═╝      ╚═╝       ╚═╝  ╚═╝ ╚═════╝ ╚═════╝
 --
 --   Murder Mystery 2  ·  native Roblox UI, no Drawing API
---   build 3.1.0+2040767a  ·  2026-09-02 21:24 UTC
+--   build 3.1.0+ee4daa07  ·  2026-09-02 21:29 UTC
 --
 --   GENERATED FILE — do not edit directly.
 --   Sources live in src/mm2/ ; rebuild with `python build.py`.
@@ -1531,6 +1531,7 @@ do
         UI.corner(minBar, 15)
         UI.stroke(minBar, C.Stroke, 1, 0.5)
         UI.trackText(minBar, "Text", title or "")
+        UI.rotatingGlow(minBar, { thickness = 2, corner = 15, transparency = 0.3, speed = 2.4 })
 
         -- sizing: pill grows with title
         minBar.Size = UDim2.fromOffset(W, 30)
@@ -1602,7 +1603,64 @@ do
         return self, titleText
     end
 
-    -- ---------------------------------------------------------- min-stack
+    -- ------------------------------------------------- rotating glow border
+    -- A glowing border whose gradient sweeps around the edge forever. Placed
+    -- INSIDE the target and oversized by `thickness`px, centred, so it peeks
+    -- out evenly on every side; the target's own body covers the middle, so the
+    -- ring never sits over content. Being a child, it naturally follows the
+    -- target wherever it's dragged or resized.
+    --   UI.rotatingGlow(target, { thickness=2, corner=12, transparency=0.35,
+    --                             speed=2, colors={...}, zindex=..., behind=true })
+    local glowTweens = {}
+    function UI.rotatingGlow(target, opts)
+        opts = opts or {}
+        local thickness = opts.thickness or 2
+        local corner = opts.corner or 12
+        local to = opts.transparency or 0.25
+        local speed = opts.speed or 2
+        local z = opts.zindex or -100
+        local colors = opts.colors or {
+            Color3.fromRGB(70, 200, 255),
+            Color3.fromRGB(140, 120, 255),
+            Color3.fromRGB(255, 70, 160),
+            Color3.fromRGB(120, 220, 120),
+        }
+
+        local overlay = make("Frame", {
+            Name = "RotatingGlow",
+            AnchorPoint = Vector2.new(0.5, 0.5),
+            -- scale 1 with a centred +2t offset makes it peek `thickness` on
+            -- every edge, so the target's body covers the middle and the ring
+            -- shows only just outside it
+            Size = UDim2.new(1, thickness * 2, 1, thickness * 2),
+            Position = UDim2.fromScale(0.5, 0.5),
+            BackgroundTransparency = 1,
+            BorderSizePixel = 0,
+            ZIndex = z,
+        })
+        UI.corner(overlay, corner + thickness)
+        overlay.Parent = target
+
+        local band = make("Frame", {
+            Name = "Band",
+            Size = UDim2.fromScale(1, 1),
+            BackgroundColor3 = C.Card,
+            BackgroundTransparency = to,
+            BorderSizePixel = 0,
+        })
+        UI.corner(band, corner + thickness)
+        band.Parent = overlay
+
+        -- keep the gradient sweeping 360° forever (no reverse so it is a true spin,
+        -- and 360° wraps seamlessly back to 0°)
+        local grad = UI.gradient(band, ColorSequence.new(colors[1], colors[2], colors[3], colors[4]), 0)
+        local gz = TweenService:Create(grad,
+            TweenInfo.new(speed, Enum.EasingStyle.Linear, Enum.EasingDirection.In, -1, false),
+            { Rotation = 360 })
+        gz:Play()
+        table.insert(glowTweens, gz)
+        return overlay, gz
+    end
     -- Minimised panels gather into a deck of stacked pills near the bottom of
     -- the overlay. Tapping the pile fans the stack upward so the user picks
     -- which panel to restore; picking one folds the rest back into the pile.
@@ -1766,6 +1824,7 @@ do
     })
     UI.Root = Root
     UI.shadow(Root, 26, 0.4)
+    UI.rotatingGlow(Root, { thickness = 2, corner = 12, transparency = 0.35, speed = 3 })
 
     local Window = make("Frame", {
         Name = "Window",
