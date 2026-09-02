@@ -8,7 +8,7 @@
 --   ╚═╝  ╚═╝╚═╝   ╚═╝      ╚═╝      ╚═╝       ╚═╝  ╚═╝ ╚═════╝ ╚═════╝
 --
 --   Murder Mystery 2  ·  native Roblox UI, no Drawing API
---   build 3.1.0+aeb21294  ·  2026-09-01 22:49 UTC
+--   build 3.1.0+493c2a7e  ·  2026-09-02 00:03 UTC
 --
 --   GENERATED FILE — do not edit directly.
 --   Sources live in src/mm2/ ; rebuild with `python build.py`.
@@ -3755,7 +3755,11 @@ do
             local char, part = shootableParts(lockedPlayer)
             if char and part then
                 local d = fovDist(part)
-                if d and d <= S.Aim.Fov then
+                -- Keep chasing the held lock once it is inside the window; if
+                -- it drifts out we still track it rather than dropping, so the
+                -- crosshair stays glued and the camera keeps swinging to it. It
+                -- only releases if the target dies / is gone.
+                if d and d <= S.Aim.Fov * 1.5 then
                     lockedChar = char
                     return char, part
                 end
@@ -3763,30 +3767,33 @@ do
             Combat.release()
         end
 
-        -- Re-use the normal target picker (role-smarter than plain nearest)
-        -- but it must be a lockable, on-screen target inside the FOV.
-        local cands = candidates()
-        if #cands == 0 then return nil end
+        -- The crosshair aims at a detected target even before the camera turns
+        -- to meet it. To make "it aims but the camera never follows" go away, a
+        -- detected target is chased directly: once pickTarget selects someone we
+        -- swing the camera to them, regardless of the FOV ring. The FOV ring
+        -- stays relevant only for acquiring a *new* target from empty.
+        local player, char, part = Combat.pickTarget()
+        if not (player and char and part) then return nil end
 
-        -- With RolePriority, pick the first valid candidate whose role matches;
-        -- otherwise the closest on-screen candidate in the FOV.
-        local target = cands[1]
-        if S.Aim.RolePriority then
-            local want = preferredRole()
-            for _, c in ipairs(cands) do
-                if Game.roleOf(c.player) == want then
-                    target = c
-                    break
-                end
+        local want = preferredRole()
+        if want and Game.roleOf(player) ~= want then
+            -- pickTarget picked the closest, but a priority role exists. Only
+            -- fall back to the closest if that role is not available at all.
+            local alt = nil
+            for _, c in ipairs(candidates()) do
+                if Game.roleOf(c.player) == want then alt = c end
+            end
+            if alt then
+                player, char, part = alt.player, alt.char, alt.part
             end
         end
 
-        lockedPlayer = target.player
-        lockedChar = target.char
-        Combat.LastTarget = target.player
-        Combat.LockedPlayer = target.player
+        lockedPlayer = player
+        lockedChar = char
+        Combat.LastTarget = player
+        Combat.LockedPlayer = player
         Combat.ManageSensitivity(true)
-        return target.char, target.part
+        return char, part
     end
 
     -- FantiHub-style "visual aim": rather than sending coordinates silently, it
