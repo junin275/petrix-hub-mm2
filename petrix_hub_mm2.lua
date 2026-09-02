@@ -8,7 +8,7 @@
 --   ╚═╝  ╚═╝╚═╝   ╚═╝      ╚═╝      ╚═╝       ╚═╝  ╚═╝ ╚═════╝ ╚═════╝
 --
 --   Murder Mystery 2  ·  native Roblox UI, no Drawing API
---   build 3.1.0+ee4daa07  ·  2026-09-02 21:29 UTC
+--   build 3.1.0+baae02b5  ·  2026-09-02 21:32 UTC
 --
 --   GENERATED FILE — do not edit directly.
 --   Sources live in src/mm2/ ; rebuild with `python build.py`.
@@ -1653,7 +1653,13 @@ do
 
         -- keep the gradient sweeping 360° forever (no reverse so it is a true spin,
         -- and 360° wraps seamlessly back to 0°)
-        local grad = UI.gradient(band, ColorSequence.new(colors[1], colors[2], colors[3], colors[4]), 0)
+        local cs = ColorSequence.new({
+            ColorSequenceKeypoint.new(0,    colors[1]),
+            ColorSequenceKeypoint.new(0.33, colors[2]),
+            ColorSequenceKeypoint.new(0.66, colors[3]),
+            ColorSequenceKeypoint.new(1,    colors[4]),
+        })
+        local grad = UI.gradient(band, cs, 0)
         local gz = TweenService:Create(grad,
             TweenInfo.new(speed, Enum.EasingStyle.Linear, Enum.EasingDirection.In, -1, false),
             { Rotation = 360 })
