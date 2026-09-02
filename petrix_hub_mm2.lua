@@ -8,7 +8,7 @@
 --   ╚═╝  ╚═╝╚═╝   ╚═╝      ╚═╝      ╚═╝       ╚═╝  ╚═╝ ╚═════╝ ╚═════╝
 --
 --   Murder Mystery 2  ·  native Roblox UI, no Drawing API
---   build 3.1.0+ce582066  ·  2026-09-02 14:27 UTC
+--   build 3.1.0+cf4af073  ·  2026-09-02 14:47 UTC
 --
 --   GENERATED FILE — do not edit directly.
 --   Sources live in src/mm2/ ; rebuild with `python build.py`.
@@ -203,12 +203,12 @@ do
             SilentAim     = false,       -- redirect your own manual shots
             AimAtHead     = true,        -- Head instead of HumanoidRootPart
             NotifyShot    = false,
-            VisualAim     = false,       -- FantiHub-style: swing camera to target
+            VisualAim     = true,        -- FantiHub-style: swing camera to target
             OnlyGun       = false,       -- visual aim only acts with the gun drawn
             Fov           = 120,         -- on-screen FOV radius (pixels) for visual aim
             ShowFov       = true,        -- draw the FOV ring on screen
             VisualSpeed   = 10,          -- camera damp rate while chasing a target
-            AutoShoot     = false,       -- auto-fire at the held visual-aim lock
+            AutoShoot     = true,        -- auto-fire at the held visual-aim lock
             RolePriority  = true,        -- as murderer, prefer the sheriff over closer innocents
         },
         Knife = {
@@ -3883,12 +3883,15 @@ do
             Combat.release()
             return
         end
-        -- Visual aim is a pure assist: swing the camera to keep the reticle on
-        -- target and let the player shoot by hand. It disables the silent
-        -- auto-fire, which is what makes the FantiHub behaviour visibly distinct.
+        -- Visual aim: swing the camera to keep the reticle on the target. In
+        -- every mode the camera ALSO follows, so the crosshair never drifts off
+        -- who is locked. The aimmarker draws on the target only while we are
+        -- actively locking it; once the camera catches up they coincide at the
+        -- crosshair centre.
         if S.Aim.VisualAim then
-            Combat.turnCamera(dt)
-            if S.Aim.AutoShoot then Combat.fireLocked() end
+            if Combat.turnCamera(dt) then
+                if S.Aim.AutoShoot then Combat.fireLocked() end
+            end
             return
         end
         Combat.fireOnce(false)
@@ -6843,7 +6846,8 @@ do
 
             local got = translateString(code, table.concat(chunk, "\n"))
             if got then
-                local lines = got:split("\n")
+                local lines = {}
+                for m in (got .. "\n"):gmatch("(.-)\n") do lines[#lines + 1] = m end
                 if #lines >= #chunk then
                     for k = 1, #chunk do
                         local tr = (lines[k] or ""):gsub("^%s+", ""):gsub("%s+$", "")
