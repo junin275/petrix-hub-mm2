@@ -8,7 +8,7 @@
 --   ╚═╝  ╚═╝╚═╝   ╚═╝      ╚═╝      ╚═╝       ╚═╝  ╚═╝ ╚═════╝ ╚═════╝
 --
 --   Murder Mystery 2  ·  native Roblox UI, no Drawing API
---   build 3.1.0+bef3f468  ·  2026-09-02 21:42 UTC
+--   build 3.1.0+dcf8f260  ·  2026-09-02 21:49 UTC
 --
 --   GENERATED FILE — do not edit directly.
 --   Sources live in src/mm2/ ; rebuild with `python build.py`.
@@ -1345,9 +1345,9 @@ do
 
     -- Randomised names so a second copy of the menu never collides with ours.
     local suffix = tostring(math.random(100000, 999999))
-    UI.Screen  = newScreen("kh_" .. suffix, 10000)
+    UI.Screen  = newScreen("kh_" .. suffix, 10002) -- Hub menu (highest)
     UI.World   = newScreen("kw_" .. suffix, 9998)  -- ESP layer, below the menu
-    UI.Overlay = newScreen("ko_" .. suffix, 10001) -- notifications, watermark
+    UI.Overlay = newScreen("ko_" .. suffix, 10001) -- notifications, watermark, floats (below Hub)
 
     -- ------------------------------------------------------------ floating
     -- Detachable panels (e.g. a section long-pressed into its own draggable,
