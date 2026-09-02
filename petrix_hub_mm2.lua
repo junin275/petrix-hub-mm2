@@ -8,7 +8,7 @@
 --   ╚═╝  ╚═╝╚═╝   ╚═╝      ╚═╝      ╚═╝       ╚═╝  ╚═╝ ╚═════╝ ╚═════╝
 --
 --   Murder Mystery 2  ·  native Roblox UI, no Drawing API
---   build 3.1.0+8019ceab  ·  2026-09-02 15:07 UTC
+--   build 3.1.0+568ded30  ·  2026-09-02 15:15 UTC
 --
 --   GENERATED FILE — do not edit directly.
 --   Sources live in src/mm2/ ; rebuild with `python build.py`.
@@ -6724,7 +6724,7 @@ do
 
     -- Common name -> ISO code. Anything unrecognised is tried as a bare code.
     local NAMES = {
-        en = "en", english = "en",
+        en = "en", english = "en", ingles = "en", ["inglês"] = "en",
         pt = "pt", portugues = "pt", ["português"] = "pt", portuguese = "pt",
         es = "es", espanol = "es", ["español"] = "es", spanish = "es",
         fr = "fr", francais = "fr", ["français"] = "fr", french = "fr",
@@ -6999,16 +6999,105 @@ do
             ["Safety"] = "Seguridad",
             ["Session"] = "Sesión",
         },
+        ar = {
+            ["Aimbot"] = "تصويب تلقائي", ["Targeting"] = "استهداف",
+            ["Aimbot Enabled"] = "تصويب تلقائي مفعّل",
+            ["Prediction"] = "تنبؤ",
+            ["Accuracy"] = "دقة",
+            ["Aim At Head"] = "التصويب على الرأس",
+            ["Visual Aim"] = "تصويب بصري",
+            ["Silent Aim"] = "تصويب صامت",
+            ["Knife"] = "سكين",
+            ["Murderer Only"] = "القاتل فقط",
+            ["ESP"] = "إسب",
+            ["Players"] = "لاعبون",
+            ["Settings"] = "إعدادات",
+            ["Interface"] = "واجهة",
+            ["Language"] = "اللغة",
+            ["Movement"] = "حركة",
+            ["Teleport"] = "انتقال",
+            ["Visuals"] = "مرئيات",
+            ["Murderer"] = "القاتل",
+            ["Sheriff"] = "الشريف",
+            ["Hero"] = "البطل",
+            ["Innocent"] = "بريء",
+            ["Coins"] = "عملات",
+            ["Farm"] = "مزرعة",
+            ["Safety"] = "أمان",
+            ["Session"] = "جلسة",
+            ["Only With Gun"] = "فقط مع المسدس",
+            ["Auto Shoot on Lock"] = "أطلق تلقائيًا عند التثبيت",
+            ["Current Target"] = "الهدف الحالي",
+            ["Speed Hack"] = "اختراق السرعة",
+            ["Walk Speed"] = "سرعة المشي",
+            ["Jump Hack"] = "اختراق القفز",
+            ["Infinite Jump"] = "قفز لا محدود",
+            ["Noclip"] = "أسلوب أو",
+            ["Fly"] = "طيران",
+            ["Field Of View"] = "مجال الرؤية",
+            ["Fullbright"] = "إضاءة كاملة",
+            ["Waypoint Name"] = "اسم النقطة",
+        },
     }
+
+    -- Strip accents/diacritics so "português" matches "portugues" and "árabe"
+    -- matches "arabe", without the user needing the exact punctuation.
+    local function normalize(s)
+        return string.lower(s):gsub("[áàâãä]", "a"):gsub("[éèêë]", "e"):gsub("[íìîï]", "i")
+            :gsub("[óòôõö]", "o"):gsub("[úùûü]", "u"):gsub("[ç]", "c"):gsub("[ñ]", "n")
+            :gsub("^%s+", ""):gsub("%s+$", "")
+    end
+
+    -- All the name spellings (keys of NAMES) once, normalized and grouped by
+    -- their language code, prebuilt for the fuzzy fallback below.
+    local NORM = {}
+    do
+        for k, code in pairs(NAMES) do
+            local n = normalize(k)
+            if n ~= "" then NORM[code] = NORM[code] or {}; NORM[code][n] = true end
+        end
+    end
+
+    -- Small Levenshtein-distance helper for approximate name matching, so typos
+    -- and near-miss spellings ("arabe", "portugues", "ingles") still resolve.
+    local function levenshtein(a, b)
+        a, b = a:lower(), b:lower()
+        local la, lb = #a, #b
+        if la == 0 then return lb end
+        if lb == 0 then return la end
+        local prev = {}
+        for j = 1, lb do prev[j] = j end
+        for i = 1, la do
+            local cur = { prev[1] + 1 }
+            local ai = a:sub(i, i)
+            for j = 1, lb do
+                local cost = ai == b:sub(j, j) and 0 or 1
+                cur[j + 1] = math.min(prev[j + 1] + 1, cur[j] + 1, prev[j] + cost)
+            end
+            prev = cur
+        end
+        return prev[lb + 1]
+    end
 
     local function codeOf(name)
         if type(name) ~= "string" then return nil end
-        local key = string.lower(name):gsub("^%s+", ""):gsub("%s+$", "")
+        local key = normalize(name)
         if key == "" then return "en" end
+        -- Exact match on a name or a bare ISO code, accent-insensitive.
         if NAMES[key] then return NAMES[key] end
         local code = key:match("^([a-z][a-z])%s*$")
-        if code then return code end
-        return nil
+        if code and (NAMES[code] or OFFLINE[code]) then return code end
+        -- Approximate: pick the closest known spelling whose distance is small
+        -- enough to feel intentional ("arabe" -> "árabe", "portugues" -> "pt").
+        local best, bestDist = nil, 3
+        for k, code in pairs(NAMES) do
+            local n = normalize(k)
+            if n ~= "" and n ~= key then
+                local d = levenshtein(key, n)
+                if d < bestDist then best, bestDist = code, d end
+            end
+        end
+        return best
     end
 
     function Lang.nameToCode(name)
@@ -7187,8 +7276,16 @@ do
         end
         Lang.busy = true
         UI.notify({title = "Language", text = ("Translating UI to %s…"):format(code), duration = 2})
+        -- Watchdog: if the network call stalls (a blocked game:HttpGet outlives
+        -- our detach), free the lock so a second translation isn't rejected
+        -- forever by a stuck "busy" flag.
+        local done = false
+        task.delay(12, function()
+            if not done then Lang.busy = false end
+        end)
         KH.detach(function()
             local ok = pcall(applySync, code)
+            done = true
             Lang.busy = false
             if ok then
                 UI.notify({title = "Language", text = ("UI translated to %s."):format(code), kind = "good", duration = 3})
