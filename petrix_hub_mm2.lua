@@ -8,7 +8,7 @@
 --   ╚═╝  ╚═╝╚═╝   ╚═╝      ╚═╝      ╚═╝       ╚═╝  ╚═╝ ╚═════╝ ╚═════╝
 --
 --   Murder Mystery 2  ·  native Roblox UI, no Drawing API
---   build 3.1.0+568ded30  ·  2026-09-02 15:15 UTC
+--   build 3.1.0+aec2759b  ·  2026-09-02 15:36 UTC
 --
 --   GENERATED FILE — do not edit directly.
 --   Sources live in src/mm2/ ; rebuild with `python build.py`.
@@ -205,9 +205,9 @@ do
             NotifyShot    = false,
             VisualAim     = true,        -- FantiHub-style: swing camera to target
             OnlyGun       = false,       -- visual aim only acts with the gun drawn
-            Fov           = 120,         -- on-screen FOV radius (pixels) for visual aim
+            Fov           = 200,         -- on-screen FOV radius (pixels) for visual aim
             ShowFov       = true,        -- draw the FOV ring on screen
-            VisualSpeed   = 10,          -- camera damp rate while chasing a target
+            VisualSpeed   = 18,          -- camera damp rate while chasing a target
             AutoShoot     = true,        -- auto-fire at the held visual-aim lock
             RolePriority  = true,        -- as murderer, prefer the sheriff over closer innocents
         },
@@ -5162,8 +5162,8 @@ do
             desc = "Screen radius (from the crosshair) where it acquires and keeps a target.",
         }))
         UI.slider(visual, opt("Aim", "VisualSpeed", {
-            text = "Visual Speed", min = 3, max = 30, step = 1,
-            desc = "How fast the camera chases the target. Low = smooth pull, high = instant snap.",
+            text = "Visual Speed", min = 3, max = 60, step = 1,
+            desc = "How hard the camera pulls to the target. Higher = tighter, faster lock.",
         }))
         UI.toggle(visual, opt("Aim", "AutoShoot", {
             text = "Auto Shoot on Lock",
@@ -5714,23 +5714,27 @@ do
             onSet = function(v) UI.KeybindPanel.Visible = v end,
         }))
         UI.toggle(interface, opt("UI", "Notifications", {text = "Notifications"}))
-        UI.input(interface, {
+        UI.dropdown(interface, {
             text = "Language",
-            placeholder = "português, español, 日本語…",
-            desc = "Type a language and the whole UI is retranslated via an online API.",
-            get = function() return S.UI.Language end,
-            set = function(v)
-                S.UI.Language = v
-                Config.touch()
+            desc = "Pick a language — the whole UI is retranslated instantly.",
+            options = {
+                "English", "Português", "Español", "Français", "Deutsch",
+                "Italiano", "日本語", "한국어", "中文", "العربية", "Русский",
+                "हिन्दी", "Türkçe", "Tiếng Việt", "ไทย", "Nederlands",
+                "Polski", "Svenska", "עברית", "Indonesia", "Ελληνικά",
+                "Українська", "Čeština",
+            },
+            get = function() return KH.Lang and KH.Lang.display or "English" end,
+            set = function(displayName)
                 local Lang = KH.Lang
                 if not Lang then return end
-                local code = Lang.nameToCode(v)
+                S.UI.Language = displayName
+                Config.touch()
+                local code = Lang.nameToCode(displayName)
                 if code == "en" then
                     Lang.reset()
                 elseif code then
                     Lang.apply(code)
-                else
-                    UI.notify({title = "Language", text = "Unknown language. Try \"pt\", \"es\", \"ja\"…", kind = "warn"})
                 end
             end,
         })
@@ -6730,27 +6734,43 @@ do
         fr = "fr", francais = "fr", ["français"] = "fr", french = "fr",
         de = "de", deutsch = "de", german = "de",
         it = "it", italiano = "it", italian = "it",
-        ja = "ja", japanese = "ja", japones = "ja", ["japonês"] = "ja",
-        ko = "ko", korean = "ko", coreano = "ko",
+        ja = "ja", japanese = "ja", japones = "ja", ["japonês"] = "ja", ["日本語"] = "ja",
+        ko = "ko", korean = "ko", coreano = "ko", ["한국어"] = "ko",
         ["zh-cn"] = "zh-CN", zh = "zh-CN", chinese = "zh-CN", chines = "zh-CN", ["中文"] = "zh-CN",
-        ar = "ar", arabic = "ar", arabe = "ar", ["árabe"] = "ar",
-        ru = "ru", russian = "ru", russo = "ru",
-        hi = "hi", hindi = "hi",
-        tr = "tr", turkish = "tr", turco = "tr",
-        vi = "vi", vietnamese = "vi", vietnamita = "vi",
-        th = "th", thai = "th", tailandes = "th", ["tailandês"] = "th",
-        nl = "nl", dutch = "nl", holandes = "nl", ["holandês"] = "nl",
-        pl = "pl", polish = "pl", polones = "pl", ["polonês"] = "pl",
-        sv = "sv", swedish = "sv", sueco = "sv",
-        he = "he", hebrew = "he", hebraico = "he",
-        id = "id", indonesian = "id", indonesio = "id", ["indonésio"] = "id",
-        el = "el", greek = "el", grego = "el",
-        uk = "uk", ukrainian = "uk", ucraniano = "uk",
-        cs = "cs", czech = "cs", tcheco = "cs",
+        ar = "ar", arabic = "ar", arabe = "ar", ["árabe"] = "ar", ["العربية"] = "ar",
+        ru = "ru", russian = "ru", russo = "ru", ["Русский"] = "ru",
+        hi = "hi", hindi = "hi", ["हिन्दी"] = "hi",
+        tr = "tr", turkish = "tr", turco = "tr", ["Türkçe"] = "tr",
+        vi = "vi", vietnamese = "vi", vietnamita = "vi", ["Tiếng Việt"] = "vi",
+        th = "th", thai = "th", tailandes = "th", ["tailandês"] = "th", ["ไทย"] = "th",
+        nl = "nl", dutch = "nl", holandes = "nl", ["holandês"] = "nl", Nederlands = "nl", Netherlands = "nl",
+        pl = "pl", polish = "pl", polones = "pl", ["polonês"] = "pl", Polski = "pl",
+        sv = "sv", swedish = "sv", sueco = "sv", Svenska = "sv",
+        he = "he", hebrew = "he", hebraico = "he", ["עברית"] = "he",
+        id = "id", indonesian = "id", indonesio = "id", ["indonésio"] = "id", Indonesia = "id",
+        el = "el", greek = "el", grego = "el", ["Ελληνικά"] = "el",
+        uk = "uk", ukrainian = "uk", ucraniano = "uk", ["Українська"] = "uk",
+        cs = "cs", czech = "cs", tcheco = "cs", ["Čeština"] = "cs",
+        da = "da", danish = "da", dinamarques = "da", ["dinamarquês"] = "da",
+        no = "no", norwegian = "no", ["norueguês"] = "no",
+        fi = "fi", finnish = "fi", finlandes = "fi", ["finlandês"] = "fi",
+        ro = "ro", romanian = "ro", romeno = "ro",
+        hu = "hu", hungarian = "hu", hungaro = "hu", ["húngaro"] = "hu",
     }
 
-    local Lang = { cache = {}, busy = false, code = "en" }
+    local Lang = { cache = {}, busy = false, code = "en", display = "English" }
     KH.Lang = Lang
+
+    -- Canonical native display name shown in the language picker for a code.
+    local CODENAME = {
+        en = "English", pt = "Português", es = "Español", fr = "Français",
+        de = "Deutsch", it = "Italiano", ja = "日本語", ko = "한국어",
+        ["zh-CN"] = "中文", ar = "العربية", ru = "Русский", hi = "हिन्दी",
+        tr = "Türkçe", vi = "Tiếng Việt", th = "ไทย", nl = "Nederlands",
+        pl = "Polski", sv = "Svenska", he = "עברית", id = "Indonesia",
+        el = "Ελληνικά", uk = "Українська", cs = "Čeština",
+        da = "Dansk", no = "Norsk", fi = "Suomi", ro = "Română", hu = "Magyar",
+    }
 
     -- Offline dictionaries for the most useful languages. These cover the whole
     -- interface, so translating into one of them is instant (no network round
@@ -7040,12 +7060,42 @@ do
         },
     }
 
-    -- Strip accents/diacritics so "português" matches "portugues" and "árabe"
-    -- matches "arabe", without the user needing the exact punctuation.
+    -- Strip accents/diacritics and lowercase **ASCII only** so "português" matches
+    -- "portugues" and "árabe" matches "arabe". Only ASCII A-Z is lowercased;
+    -- all other bytes (accents already replaced above, plus CJK/Cyrillic/Arabic)
+    -- pass through untouched, since string.lower() would corrupt their UTF-8.
+    local ACC = {
+        ["á"] = "a", ["à"] = "a", ["â"] = "a", ["ã"] = "a", ["ä"] = "a", ["Á"] = "a", ["À"] = "a", ["Â"] = "a", ["Ã"] = "a", ["Ä"] = "a",
+        ["é"] = "e", ["è"] = "e", ["ê"] = "e", ["ë"] = "e", ["É"] = "e", ["È"] = "e", ["Ê"] = "e", ["Ë"] = "e",
+        ["í"] = "i", ["ì"] = "i", ["î"] = "i", ["ï"] = "i", ["Í"] = "i", ["Ì"] = "i", ["Î"] = "i", ["Ï"] = "i",
+        ["ó"] = "o", ["ò"] = "o", ["ô"] = "o", ["õ"] = "o", ["ö"] = "o", ["Ó"] = "o", ["Ò"] = "o", ["Ô"] = "o", ["Õ"] = "o", ["Ö"] = "o",
+        ["ú"] = "u", ["ù"] = "u", ["û"] = "u", ["ü"] = "u", ["Ú"] = "u", ["Ù"] = "u", ["Û"] = "u", ["Ü"] = "u",
+        ["ç"] = "c", ["Ç"] = "c", ["ñ"] = "n", ["Ñ"] = "n",
+    }
     local function normalize(s)
-        return string.lower(s):gsub("[áàâãä]", "a"):gsub("[éèêë]", "e"):gsub("[íìîï]", "i")
-            :gsub("[óòôõö]", "o"):gsub("[úùûü]", "u"):gsub("[ç]", "c"):gsub("[ñ]", "n")
-            :gsub("^%s+", ""):gsub("%s+$", "")
+        -- Walk whole UTF-8 code points (lead byte + continuation bytes) so that
+        -- a 2-byte char like "á" is looked up as one key instead of by its bytes.
+        local out = {}
+        local i, n = 1, #s
+        while i <= n do
+            local b = string.byte(s, i)
+            local width = 1
+            if b >= 0xF0 then width = 4
+            elseif b >= 0xE0 then width = 3
+            elseif b >= 0xC0 then width = 2 end
+            local ch = string.sub(s, i, i + width - 1)
+            local repl = ACC[ch]
+            if repl then
+                out[#out + 1] = repl
+            elseif b >= 65 and b <= 90 then
+                out[#out + 1] = string.char(b + 32)
+            else
+                out[#out + 1] = ch
+            end
+            i = i + width
+        end
+        local r = table.concat(out)
+        return (r:gsub("^%s+", ""):gsub("%s+$", ""))
     end
 
     -- All the name spellings (keys of NAMES) once, normalized and grouped by
@@ -7066,21 +7116,26 @@ do
         if la == 0 then return lb end
         if lb == 0 then return la end
         local prev = {}
-        for j = 1, lb do prev[j] = j end
+        for j = 0, lb do prev[j] = j end
         for i = 1, la do
-            local cur = { prev[1] + 1 }
+            local cur = {}
+            cur[0] = prev[0] + 1
             local ai = a:sub(i, i)
             for j = 1, lb do
                 local cost = ai == b:sub(j, j) and 0 or 1
-                cur[j + 1] = math.min(prev[j + 1] + 1, cur[j] + 1, prev[j] + cost)
+                cur[j] = math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + cost)
             end
             prev = cur
         end
-        return prev[lb + 1]
+        return prev[lb]
     end
 
     local function codeOf(name)
         if type(name) ~= "string" then return nil end
+        -- Exact match on the raw spelling first (dropdown sends canonical display
+        -- names like "日本語" or "Türkçe" byte-for-byte, so this never has to
+        -- normalise non-Latin scripts).
+        if NAMES[name] then return NAMES[name] end
         local key = normalize(name)
         if key == "" then return "en" end
         -- Exact match on a name or a bare ISO code, accent-insensitive.
@@ -7242,6 +7297,7 @@ do
                 pcall(function() e.obj[e.prop] = e.upper and original:upper() or original end)
             end
             Lang.code = "en"
+            Lang.display = "English"
             return true
         end
 
@@ -7264,12 +7320,14 @@ do
         end
 
         Lang.code = code
+        Lang.display = CODENAME[code] or Lang.display
         Lang.saveCache(code)
         return ok
     end
 
     function Lang.apply(name)
         local code = codeOf(name) or "en"
+        Lang.display = CODENAME[code] or name or "English"
         if Lang.busy then
             UI.notify({title = "Language", text = "Still translating…", kind = "warn"})
             return false
@@ -7298,6 +7356,8 @@ do
 
     function Lang.reset()
         Lang.busy = false
+        Lang.code = "en"
+        Lang.display = "English"
         pcall(applySync, "en")
     end
 
