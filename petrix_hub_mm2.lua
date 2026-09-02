@@ -8,7 +8,7 @@
 --   ╚═╝  ╚═╝╚═╝   ╚═╝      ╚═╝      ╚═╝       ╚═╝  ╚═╝ ╚═════╝ ╚═════╝
 --
 --   Murder Mystery 2  ·  native Roblox UI, no Drawing API
---   build 3.1.0+fc42f4d0  ·  2026-09-02 21:12 UTC
+--   build 3.1.0+4ad8818a  ·  2026-09-02 21:18 UTC
 --
 --   GENERATED FILE — do not edit directly.
 --   Sources live in src/mm2/ ; rebuild with `python build.py`.
@@ -1525,6 +1525,9 @@ do
         function self.open()
             minBar.Visible = false
             frame.Visible = true
+            -- pull out of the minimised deck (if we were parked in it)
+            local deck = UI.MinDeck
+            if deck then deck.pop(self) end
             pcall(function()
                 tween(frame, 0.16, {BackgroundTransparency = 0})
             end)
@@ -1535,7 +1538,10 @@ do
             end)
             task.delay(0.12, function()
                 frame.Visible = false
+                -- park the pill into the shared minimise deck at the bottom
                 minBar.Visible = true
+                local deck = UI.MinDeck
+                if deck then deck.push(self) end
                 pcall(function()
                     tween(minBar, 0.18, {BackgroundTransparency = 0})
                 end)
@@ -1548,6 +1554,8 @@ do
         function self.close()
             frame.Visible = false
             minBar.Visible = false
+            local deck = UI.MinDeck
+            if deck then deck.pop(self) end
             if self.onRestore then
                 pcall(self.onRestore)
             end
@@ -1565,12 +1573,146 @@ do
         xBtn.InputBegan:Connect(function(input)
             if input.UserInputType == Enum.UserInputType.Touch then self.close() end
         end)
-        minBar.MouseButton1Click:Connect(function() self.open() end)
+        minBar.MouseButton1Click:Connect(function()
+            local deck = UI.MinDeck
+            if deck and deck.pillTap then deck.pillTap(self) else self.open() end
+        end)
         minBar.InputBegan:Connect(function(input)
-            if input.UserInputType == Enum.UserInputType.Touch then self.open() end
+            if input.UserInputType == Enum.UserInputType.Touch then
+                local deck = UI.MinDeck
+                if deck and deck.pillTap then deck.pillTap(self) else self.open() end
+            end
         end)
 
         return self, titleText
+    end
+
+    -- ---------------------------------------------------------- min-stack
+    -- Minimised panels gather into a deck of stacked pills near the bottom of
+    -- the overlay. Tapping the pile fans the stack upward so the user picks
+    -- which panel to restore; picking one folds the rest back into the pile.
+    local MinDeck = { pills = {} }                 -- list of {pill, baseY, self}
+    UI.MinDeck = MinDeck
+    local DECK_TAS = 8                               -- touchable stack offset
+
+    local function layout()
+        -- drop any pills whose float was destroyed
+        for i = #MinDeck.pills, 1, -1 do
+            local e = MinDeck.pills[i]
+            if not e.pill or e.pill.Parent == nil then
+                if e.badge then pcall(function() e.badge:Destroy() end) end
+                table.remove(MinDeck.pills, i)
+            end
+        end
+        local n = #MinDeck.pills
+        -- pills pile upward from the deck anchor; only the top one peeks
+        for i, e in ipairs(MinDeck.pills) do
+            e.pill.AnchorPoint = Vector2.new(0.5, 1)
+            e.pill.ZIndex = 600 + i
+            e.pill.Position = UDim2.new(0.5, 0, 1, -((n - i + 1) * DECK_TAS))
+        end
+        -- the top card owns the badge showing the pile count
+        for i, e in ipairs(MinDeck.pills) do
+            if e.badge then
+                e.badge.Text = tostring(n)
+                e.badge.Visible = n > 1 and i == n
+            end
+        end
+    end
+
+    UI.MinDeck.push = function(selfObj)
+        -- Called by a float's min(); adds it to the pile at the back (top).
+        local exists = false
+        for _, e in ipairs(MinDeck.pills) do
+            if e.self == selfObj then exists = true break end
+        end
+        if exists then return end
+        local pill = selfObj.bar
+        local badge = make("TextLabel", {
+            Name = "Badge",
+            Text = "1",
+            Font = Enum.Font.GothamBold,
+            TextSize = 9,
+            TextColor3 = C.Text,
+            BackgroundColor3 = C.Accent,
+            BorderSizePixel = 0,
+            Position = UDim2.fromOffset(-8, -8),
+            AnchorPoint = Vector2.new(1, 0),
+            Size = UDim2.fromOffset(16, 16),
+            BackgroundTransparency = 0,
+            ZIndex = 641,
+            Parent = pill,
+        })
+        UI.corner(badge, 8)
+        table.insert(MinDeck.pills, { self = selfObj, pill = pill, badge = badge })
+        layout()
+    end
+
+    UI.MinDeck.pop = function(selfObj)
+        for i, e in ipairs(MinDeck.pills) do
+            if e.self == selfObj then
+                if e.badge then e.badge:Destroy() end
+                table.remove(MinDeck.pills, i)
+                break
+            end
+        end
+        layout()
+    end
+
+    -- tap the pile → fan out so the user can pick; tap a card → open it
+    local expanded = false
+    UI.MinDeck.onTap = function()
+        if #MinDeck.pills == 0 then return end
+        if #MinDeck.pills == 1 then
+            MinDeck.pills[1].self:open()
+            return
+        end
+        expanded = not expanded
+        local n = #MinDeck.pills
+        for i, e in ipairs(MinDeck.pills) do
+            e.pill.AnchorPoint = Vector2.new(0.5, 1)
+            e.pill.ClipsDescendants = false
+            e.pill.ZIndex = 600 + i
+            local y = expanded and (i - 1) * 58 or (n - i + 1) * DECK_TAS
+            pcall(function() tween(e.pill, 0.22, {Position = UDim2.new(0.5, 0, 1, -y)}) end)
+            pcall(function() tween(e.pill, 0.22, {BackgroundTransparency = 0}) end)
+        end
+    end
+
+    UI.MinDeck.pick = function(selfObj)
+        selfObj:open()
+    end
+
+    UI.MinDeck.reopen = function(selfObj)
+        selfObj:open()
+    end
+
+    UI.MinDeck.collapse = function()
+        -- fold the deck back into the pile (used after a pick)
+        local n = #MinDeck.pills
+        for i, e in ipairs(MinDeck.pills) do
+            e.pill.AnchorPoint = Vector2.new(0.5, 1)
+            e.pill.ZIndex = 600 + i
+            pcall(function() tween(e.pill, 0.2, {Position = UDim2.new(0.5, 0, 1, -((n - i + 1) * DECK_TAS))}) end)
+        end
+        expanded = false
+    end
+
+    UI.MinDeck.pillTap = function(selfObj)
+        if #MinDeck.pills == 0 then return end
+        -- a pill already open: just handle the deck top → fan, others → open
+        for i, e in ipairs(MinDeck.pills) do
+            if e.self == selfObj then
+                if not expanded and i == #MinDeck.pills then
+                    MinDeck.onTap()          -- top pill → fan the deck
+                else
+                    selfObj:open()           -- pick this panel
+                    MinDeck.collapse()       -- fold the leftovers back
+                end
+                return
+            end
+        end
+        selfObj:open()
     end
 
     -- ---------------------------------------------------------- drop shadow
