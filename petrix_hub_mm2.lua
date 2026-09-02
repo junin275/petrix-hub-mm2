@@ -8,7 +8,7 @@
 --   ╚═╝  ╚═╝╚═╝   ╚═╝      ╚═╝      ╚═╝       ╚═╝  ╚═╝ ╚═════╝ ╚═════╝
 --
 --   Murder Mystery 2  ·  native Roblox UI, no Drawing API
---   build 3.1.0+e507777c  ·  2026-09-02 21:39 UTC
+--   build 3.1.0+bef3f468  ·  2026-09-02 21:42 UTC
 --
 --   GENERATED FILE — do not edit directly.
 --   Sources live in src/mm2/ ; rebuild with `python build.py`.
@@ -1878,9 +1878,10 @@ do
             ColorSequenceKeypoint.new(1, C.Bg),
         }),
         Rotation = -8,
-        Transparency = NumberSequence.new(
+        Transparency = NumberSequence.new({
             NumberSequenceKeypoint.new(0, 0.75),
-            NumberSequenceKeypoint.new(1, 0)),
+            NumberSequenceKeypoint.new(1, 0),
+        }),
         Parent = Window,
     })
     UI.WindowLite = winLite
