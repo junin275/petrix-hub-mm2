@@ -8,7 +8,7 @@
 --   ╚═╝  ╚═╝╚═╝   ╚═╝      ╚═╝      ╚═╝       ╚═╝  ╚═╝ ╚═════╝ ╚═════╝
 --
 --   Murder Mystery 2  ·  native Roblox UI, no Drawing API
---   build 3.1.0+b9e873d8  ·  2026-09-02 00:06 UTC
+--   build 3.1.0+ce582066  ·  2026-09-02 14:27 UTC
 --
 --   GENERATED FILE — do not edit directly.
 --   Sources live in src/mm2/ ; rebuild with `python build.py`.
@@ -3992,18 +3992,18 @@ do
                 local t = targets[i]
                 local charNow = t.char or U.charOf(t.player)
                 local partNow = charNow and (S.Aim.AimAtHead and charNow:FindFirstChild("Head") or U.torsoOf(charNow))
-                if not (charNow and partNow) then goto continue end
-                local goal = CFrame.lookAt(cam.CFrame.Position, Comb.aimPoint(charNow, partNow))
-                -- Ease from wherever the camera is now toward the target so the
-                -- sweep is clearly visible rather than a hard cut.
-                for step = 1, 8 do
-                    if not KH.Alive then break end
-                    cam.CFrame = cam.CFrame:Lerp(goal, 0.35)
-                    task.wait()
+                if charNow and partNow then
+                    local goal = CFrame.lookAt(cam.CFrame.Position, Comb.aimPoint(charNow, partNow))
+                    -- Ease from wherever the camera is now toward the target so
+                    -- the sweep is clearly visible rather than a hard cut.
+                    for step = 1, 8 do
+                        if not KH.Alive then break end
+                        cam.CFrame = cam.CFrame:Lerp(goal, 0.35)
+                        task.wait()
+                    end
+                    UI.notify({title = "Aim Test", text = ("→ %s"):format(t.player.DisplayName or t.player.Name), duration = 0.6})
+                    task.wait(0.3)
                 end
-                UI.notify({title = "Aim Test", text = ("→ %s"):format(t.player.DisplayName or t.player.Name), duration = 0.6})
-                task.wait(0.3)
-                ::continue::
             end
             aimTestRunning = false
             UI.notify({title = "Aim Test", text = "Done. Aimbot is tracking ok.", kind = "good"})
