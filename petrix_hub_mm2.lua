@@ -8,7 +8,7 @@
 --   ╚═╝  ╚═╝╚═╝   ╚═╝      ╚═╝      ╚═╝       ╚═╝  ╚═╝ ╚═════╝ ╚═════╝
 --
 --   Murder Mystery 2  ·  native Roblox UI, no Drawing API
---   build 3.1.0+ee48f814  ·  2026-09-02 21:08 UTC
+--   build 3.1.0+fc42f4d0  ·  2026-09-02 21:12 UTC
 --
 --   GENERATED FILE — do not edit directly.
 --   Sources live in src/mm2/ ; rebuild with `python build.py`.
@@ -1368,7 +1368,7 @@ do
             Size = UDim2.new(1, 0, 0, 32),
             BackgroundColor3 = C.Row,
             BorderSizePixel = 0,
-            ZIndex = 601,
+            ZIndex = 604,
             Parent = frame,
         })
         UI.corner(bar, 10)
@@ -1409,6 +1409,7 @@ do
             AnchorPoint = Vector2.new(1, 0.5),
             Position = UDim2.new(1, -56, 0.5, 0),
             Size = UDim2.fromOffset(22, 22),
+            ZIndex = 640,
             Parent = bar,
         })
         UI.corner(minBtn, 6)
@@ -1424,6 +1425,7 @@ do
             AnchorPoint = Vector2.new(1, 0.5),
             Position = UDim2.new(1, -8, 0.5, 0),
             Size = UDim2.fromOffset(22, 22),
+            ZIndex = 640,
             Parent = bar,
         })
         UI.corner(xBtn, 6)
@@ -1443,9 +1445,10 @@ do
         body.AutomaticSize = Enum.AutomaticSize.Y
         UI.pad(body, 0, 8, 8, 8, 8)
 
-        -- drag handle (mouse + touch)
+        -- drag handle (mouse + touch) — the title label only, so the − / ✕
+        -- buttons always win the tap without starting a drag.
         local dragging, dragStart, frameStart
-        bar.InputBegan:Connect(function(input, gpe)
+        titleText.InputBegan:Connect(function(input, gpe)
             if gpe then return end
             if input.UserInputType == Enum.UserInputType.MouseButton1
                 or input.UserInputType == Enum.UserInputType.Touch then
@@ -2311,8 +2314,11 @@ do
                 local target = math.max(90, #section.rows * 42 + 40)
                 scroll.Size = UDim2.new(1, 0, 0, math.min(target, 380))
             end
-            fl.frame.Position = UDim2.new(0.5, 0, 0.35, 0)
+            -- place the float with concrete pixel offsets so first-drag math is clean
             fl.frame.AnchorPoint = Vector2.new(0.5, 0)
+            local w = math.max(1, Floats.AbsoluteSize.X)
+            local h = math.max(1, Floats.AbsoluteSize.Y)
+            fl.frame.Position = UDim2.fromOffset(math.floor(w / 2), math.floor(h * 0.3))
             fl.open()
             section.float = fl
             -- Closing (X) must give the card back to the menu, so the float's
